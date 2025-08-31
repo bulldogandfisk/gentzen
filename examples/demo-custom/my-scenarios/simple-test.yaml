@@ -1,0 +1,30 @@
+propositions:
+  - BookFlight
+  - BookOperaTickets
+
+steps:
+  # STEP 1: (UserWantsEuropeanFlight ∧ UserHasVisa)
+  - rule: alpha
+    subtype: and
+    from:
+      - UserWantsEuropeanFlight
+      - UserHasVisa
+
+  # STEP 2: (UserHasOperaInterest → BookOperaTickets)
+  - rule: alpha
+    subtype: implies
+    from:
+      - UserHasOperaInterest
+      - BookOperaTickets
+
+  # STEP 3: (TravelingWithDog → BookFlight)
+  - rule: alpha
+    subtype: implies
+    from:
+      - TravelingWithDog
+      - BookFlight
+
+targets:
+  - (UserWantsEuropeanFlight ∧ UserHasVisa)
+  - BookOperaTickets
+  - BookFlight

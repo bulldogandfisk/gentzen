@@ -1,0 +1,61 @@
+# Negation Demo Scenario
+# Shows how to use negation (~) in Gentzen reasoning
+
+# Propositions we want to derive
+propositions:
+  - AccessDenied
+  - SystemAvailable
+  - AllowGuestAccess
+  - RequireAuthentication
+
+# Reasoning steps using negation
+steps:
+  # Step 1: If user has no permission AND system security passed, deny access
+  - rule: alpha
+    subtype: and
+    from: 
+      - ~UserHasPermission
+      - SecurityCheckPassed
+  
+  # Step 2: The above conjunction implies access denied
+  - rule: alpha
+    subtype: implies
+    from:
+      - (~UserHasPermission ∧ SecurityCheckPassed)
+      - AccessDenied
+  
+  # Step 3: If user is guest AND not in maintenance, allow guest access
+  - rule: alpha
+    subtype: and
+    from:
+      - UserIsGuest
+      - ~MaintenanceMode
+      
+  # Step 4: The above implies guest access allowed
+  - rule: alpha
+    subtype: implies
+    from:
+      - (UserIsGuest ∧ ~MaintenanceMode)
+      - AllowGuestAccess
+  
+  # Step 5: Security passed and not maintenance means system available
+  - rule: alpha
+    subtype: and
+    from:
+      - SecurityCheckPassed
+      - ~MaintenanceMode
+      
+  # Step 6: System availability
+  - rule: alpha
+    subtype: implies
+    from:
+      - (SecurityCheckPassed ∧ ~MaintenanceMode)
+      - SystemAvailable
+
+# What we want to prove
+targets:
+  - AccessDenied                           # Should be proven
+  - AllowGuestAccess                       # Should be proven  
+  - SystemAvailable                        # Should be proven
+  - (~UserHasPermission → AccessDenied)    # Implication with negation
+  - (UserIsGuest ∧ ~MaintenanceMode)      # Conjunction with negation

@@ -1,0 +1,468 @@
+# ============================================================================
+# ENTERPRISE KITCHEN SINK SCENARIO
+# ============================================================================
+# 
+# This is the comprehensive "kitchen sink" example that demonstrates EVERY
+# logical construct supported by the Gentzen reasoning system. It models a
+# complex enterprise order processing and risk management system.
+#
+# EDUCATIONAL PURPOSE:
+# This file serves as the definitive reference for developers learning to
+# create testable, provable formulas using this system. Every supported
+# logical construct is demonstrated with real-world business context.
+#
+# SCENARIO OVERVIEW:
+# We model an enterprise e-commerce platform that must validate orders
+# through multiple layers: customer verification, inventory checks, payment
+# processing, fraud detection, regulatory compliance, and system health
+# monitoring. The logic demonstrates how complex business rules can be
+# expressed formally and proven mathematically.
+#
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# PROPOSITIONS: Named Conclusions/Actions
+# ----------------------------------------------------------------------------
+# The propositions section lists all the named business actions or conclusions
+# that our reasoning system can derive. These represent the final outcomes
+# of our business logic - the actions we take based on the conditions we
+# can prove to be true.
+
+propositions:
+  # Primary Business Actions
+  - ProcessOrder              # Execute the customer's order
+  - RejectOrder               # Decline to process the order
+  - RequireManualReview       # Flag for human oversight
+  - ApplyFraudHold            # Place order under fraud investigation
+  
+  # Financial Operations  
+  - ChargePayment             # Process payment transaction
+  - RefundPayment             # Reverse a previous charge
+  - EscrowFunds               # Hold funds pending verification
+  - ReleaseEscrow             # Release held funds to merchant
+  
+  # Compliance and Risk
+  - InitiateAMLCheck          # Anti-Money Laundering verification
+  - GenerateAuditLog          # Create compliance audit trail
+  - NotifyRegulator           # Alert regulatory body
+  - ActivateRiskMitigation    # Enable additional security measures
+  
+  # System Operations
+  - ScaleInfrastructure       # Add computing resources
+  - ActivateFailover          # Switch to backup systems
+  - TriggerMaintenanceMode    # Enter maintenance state
+  - SendOperationalAlert      # Notify operations team
+  
+  # Customer Experience
+  - SendConfirmationEmail     # Confirm order to customer
+  - OfferExpressShipping      # Provide premium shipping option
+  - ApplyLoyaltyDiscount      # Give customer loyalty benefits
+  - ScheduleDelivery          # Arrange order fulfillment
+
+# ----------------------------------------------------------------------------
+# INFERENCE STEPS: The Heart of Business Logic
+# ----------------------------------------------------------------------------
+# Each step demonstrates a specific logical rule applied to business conditions.
+# The steps build upon each other to create complex reasoning chains that
+# mirror real-world enterprise decision-making processes.
+
+steps:
+
+  # ========================================================================
+  # SECTION 1: BASIC CONJUNCTIONS (Alpha Rule - AND Logic)
+  # ========================================================================
+  # Conjunctions combine multiple conditions that must ALL be true.
+  # In business logic, this represents "required conditions" - scenarios
+  # where every criterion must be satisfied.
+
+  # STEP 1: Customer Verification Foundation
+  # Business Rule: A verified customer must have both identity confirmed AND
+  # be in good standing (not on any restriction lists).
+  # Demonstrates: Basic conjunction using Unicode ∧ symbol
+  - rule: alpha
+    subtype: and
+    from:
+      - CustomerIdentityVerified    # Government ID or similar confirmed
+      - CustomerInGoodStanding      # No previous fraud or violations
+    # Result: Creates (CustomerIdentityVerified ∧ CustomerInGoodStanding)
+    # Business Impact: Establishes foundation for trusted customer status
+
+  # STEP 2: Payment Method Validation  
+  # Business Rule: Valid payment requires both sufficient funds AND 
+  # payment method being active/not expired.
+  # Demonstrates: Conjunction with mixed operator style (using AND)
+  - rule: alpha
+    subtype: and
+    from:
+      - PaymentMethodValid          # Credit card/account is active
+      - SufficientFunds            # Account has adequate balance
+    # Result: Creates (PaymentMethodValid AND SufficientFunds)
+    # Business Impact: Ensures payment can actually be processed
+
+  # STEP 3: Inventory Readiness Check
+  # Business Rule: Order fulfillment requires item availability AND
+  # shipping capacity being available.
+  # Demonstrates: Another conjunction building on business requirements
+  - rule: alpha
+    subtype: and  
+    from:
+      - InventoryAvailable         # Product is in stock
+      - ShippingCapacityAvailable  # Can handle shipping volume
+    # Result: Creates (InventoryAvailable ∧ ShippingCapacityAvailable)
+    # Business Impact: Confirms we can actually fulfill the order
+
+  # STEP 4: System Health Foundation
+  # Business Rule: Healthy system operation requires both primary systems
+  # running AND database connectivity being stable.
+  # Demonstrates: Infrastructure-level conjunction
+  - rule: alpha
+    subtype: and
+    from:
+      - PrimarySystemsOnline       # Core services operational
+      - DatabaseConnected          # Data access available
+    # Result: Creates (PrimarySystemsOnline ∧ DatabaseConnected)
+    # Business Impact: Establishes baseline for system reliability
+
+  # ========================================================================
+  # SECTION 2: BUSINESS IMPLICATIONS (Alpha Rule - IMPLIES Logic)  
+  # ========================================================================
+  # Implications represent "if-then" business rules - the core of business
+  # process automation. They encode the logic: "if conditions X are met,
+  # then action Y should be taken."
+
+  # STEP 5: Core Order Processing Rule
+  # Business Rule: IF customer is verified AND payment is valid AND inventory
+  # is ready, THEN we should process the order.
+  # Demonstrates: Complex implication using → symbol
+  - rule: alpha
+    subtype: implies
+    from:
+      - ((CustomerIdentityVerified ∧ CustomerInGoodStanding) ∧ (PaymentMethodValid ∧ SufficientFunds))
+      - ProcessOrder
+    # Result: Creates complex implication for order processing
+    # Business Impact: Automates core order approval logic
+
+  # STEP 6: Fraud Detection Trigger
+  # Business Rule: IF we have high-risk indicators, THEN initiate fraud holds.
+  # Demonstrates: Risk management through implication logic
+  - rule: alpha
+    subtype: implies
+    from:
+      - HighRiskTransaction        # Fraud scoring indicates risk
+      - ApplyFraudHold
+    # Result: Creates (HighRiskTransaction → ApplyFraudHold)
+    # Business Impact: Automates fraud prevention measures
+
+  # STEP 7: Regulatory Compliance Automation
+  # Business Rule: IF transaction exceeds regulatory thresholds, THEN
+  # Anti-Money Laundering checks must be initiated.
+  # Demonstrates: Compliance automation using IMPLIES text format
+  - rule: alpha
+    subtype: implies
+    from:
+      - TransactionExceedsThreshold # Amount triggers regulatory scrutiny
+      - InitiateAMLCheck
+    # Result: Creates (TransactionExceedsThreshold IMPLIES InitiateAMLCheck)
+    # Business Impact: Ensures automatic regulatory compliance
+
+  # STEP 8: Infrastructure Scaling Logic
+  # Business Rule: IF system is under high load AND performance degrades,
+  # THEN scale infrastructure automatically.
+  # Demonstrates: Operational automation through implications
+  - rule: alpha
+    subtype: implies
+    from:
+      - (SystemUnderHighLoad ∧ PerformanceDegraded)
+      - ScaleInfrastructure
+    # Result: Creates auto-scaling business rule
+    # Business Impact: Maintains system performance under load
+
+  # ========================================================================
+  # SECTION 3: ALTERNATIVE PATHWAYS (Beta Rule - OR Logic)
+  # ========================================================================
+  # Disjunctions represent alternative pathways - situations where any one
+  # of several conditions being true is sufficient to trigger an action.
+  # Critical for fallback mechanisms and flexible business processes.
+
+  # STEP 9: Payment Processing Alternatives
+  # Business Rule: Payment can be processed through multiple channels -
+  # either direct charge OR escrow mechanism.
+  # Demonstrates: Basic disjunction using ∨ symbol
+  - rule: beta
+    from:
+      - ChargePayment              # Direct payment processing
+      - EscrowFunds               # Escrow-based payment
+    # Result: Creates (ChargePayment ∨ EscrowFunds)
+    # Business Impact: Provides payment processing flexibility
+
+  # STEP 10: Order Resolution Pathways
+  # Business Rule: Every order must reach a resolution - either processed
+  # OR rejected OR sent for manual review.
+  # Demonstrates: Comprehensive outcome coverage via disjunction
+  - rule: beta
+    from:
+      - (ChargePayment ∨ EscrowFunds)  # From previous step
+      - RequireManualReview            # Alternative: human review
+    # Result: Creates ((ChargePayment ∨ EscrowFunds) ∨ RequireManualReview)
+    # Business Impact: Ensures every order has a resolution path
+
+  # STEP 11: System Recovery Options
+  # Business Rule: When primary systems fail, we have multiple recovery
+  # options - failover OR maintenance mode.
+  # Demonstrates: Disaster recovery logic through disjunction
+  - rule: beta
+    from:
+      - ActivateFailover           # Switch to backup systems
+      - TriggerMaintenanceMode     # Controlled shutdown
+    # Result: Creates (ActivateFailover ∨ TriggerMaintenanceMode)
+    # Business Impact: Provides system resilience options
+
+  # ========================================================================
+  # SECTION 4: CONTRAPOSITION (Logical Inversion)
+  # ========================================================================
+  # Contraposition transforms "A implies B" into "not B implies not A".
+  # Extremely valuable for risk management, compliance checking, and
+  # reverse engineering business conditions from observed outcomes.
+
+  # STEP 12: Risk Assessment via Contraposition
+  # Business Logic: From "High risk implies fraud hold", we derive
+  # "No fraud hold implies low risk" - useful for risk scoring.
+  # Demonstrates: Risk management through logical inversion
+  - rule: contraposition
+    from:
+      - (HighRiskTransaction → ApplyFraudHold)
+    # Result: Creates (~ApplyFraudHold → ~HighRiskTransaction)
+    # Business Impact: Risk assessment from fraud hold status
+
+  # STEP 13: Compliance Verification via Contraposition  
+  # Business Logic: From "Threshold exceeded implies AML check", we get
+  # "No AML check implies threshold not exceeded" - for audit purposes.
+  # Demonstrates: Regulatory logic inversion
+  - rule: contraposition
+    from:
+      - (TransactionExceedsThreshold → InitiateAMLCheck)
+    # Result: Creates (~InitiateAMLCheck → ~TransactionExceedsThreshold)
+    # Business Impact: Audit trail verification logic
+
+  # ========================================================================
+  # SECTION 5: DOUBLE NEGATION (Classical Logic Normalization)
+  # ========================================================================
+  # Double negation rules handle the logical equivalence between "A" and "not not A".
+  # Essential for normalizing complex logical expressions and handling
+  # negated business conditions that arise from contraposition or complex rules.
+
+  # STEP 14: Customer Status Normalization
+  # Business Logic: Convert "not not in good standing" back to positive form.
+  # Demonstrates: Double negation elimination for cleaner logic
+  - rule: doubleNegation
+    subtype: elimination
+    from:
+      - ~~CustomerInGoodStanding   # Double negative customer status
+    # Result: Creates CustomerInGoodStanding
+    # Business Impact: Simplifies customer status representations
+
+  # STEP 15: Risk Flag Clarification
+  # Business Logic: Introduce double negation for subsequent elimination.
+  # Demonstrates: Double negation introduction (less common but useful)
+  - rule: doubleNegation
+    subtype: introduction
+    from:
+      - SystemUnderHighLoad        # Current system state
+    # Result: Creates ~~SystemUnderHighLoad
+    # Business Impact: Prepares for complex logical transformations
+
+  # ========================================================================
+  # SECTION 6: EQUIVALENCE (Bidirectional Relationships)
+  # ========================================================================
+  # Equivalence (A ↔ B) means both "A implies B" AND "B implies A".
+  # Represents bidirectional business relationships where conditions
+  # are mutually dependent or definitionally equivalent.
+
+  # STEP 16: Customer-Payment Equivalence
+  # Business Logic: Verified customer status is equivalent to having
+  # valid payment capabilities in our trusted customer program.
+  # Demonstrates: Bidirectional business relationship using ↔
+  - rule: equivalence
+    from:
+      - (CustomerIdentityVerified ∧ CustomerInGoodStanding)
+      - (PaymentMethodValid ∧ SufficientFunds)
+    # Result: Creates complex bidirectional equivalence
+    # Business Impact: Defines trusted customer program requirements
+
+  # STEP 17: System Health Equivalence
+  # Business Logic: Healthy system state is equivalent to having
+  # both primary systems online and database connected.
+  # Demonstrates: Infrastructure equivalence using IFF text format
+  - rule: equivalence
+    from:
+      - SystemHealthy             # Overall system state
+      - (PrimarySystemsOnline ∧ DatabaseConnected)
+    # Result: Creates (SystemHealthy ↔ (PrimarySystemsOnline ∧ DatabaseConnected))
+    # Business Impact: Defines system health monitoring criteria
+
+  # ========================================================================
+  # SECTION 7: ADVANCED COMPOSITE RULES
+  # ========================================================================
+  # These steps demonstrate how the basic rules combine to create
+  # sophisticated business logic that handles complex enterprise scenarios.
+
+  # STEP 18: Comprehensive Order Approval Logic
+  # Business Rule: Final order approval requires customer verification,
+  # payment validation, inventory availability, AND system health.
+  # Demonstrates: Multiple conjunctions building complex conditions
+  - rule: alpha
+    subtype: and
+    from:
+      - (CustomerIdentityVerified ∧ CustomerInGoodStanding)
+      - (InventoryAvailable ∧ ShippingCapacityAvailable)
+    # Result: Builds toward comprehensive approval criteria
+    # Business Impact: Ensures all order prerequisites are met
+
+  # STEP 19: Final Order Processing Implication
+  # Business Rule: IF all verification AND inventory AND system checks pass,
+  # THEN we can confidently process the order AND send confirmation.
+  # Demonstrates: Complex business process automation
+  - rule: alpha
+    subtype: implies
+    from:
+      - ((CustomerIdentityVerified ∧ CustomerInGoodStanding) ∧ (InventoryAvailable ∧ ShippingCapacityAvailable))
+      - (ProcessOrder ∧ SendConfirmationEmail)
+    # Result: Creates comprehensive order processing rule
+    # Business Impact: Automates entire order approval workflow
+
+  # STEP 20: Emergency Response Procedures
+  # Business Rule: IF primary systems fail OR database disconnects,
+  # THEN activate emergency procedures (failover OR maintenance).
+  # Demonstrates: Complex emergency response logic with multiple OR conditions
+  - rule: alpha
+    subtype: implies
+    from:
+      - (~PrimarySystemsOnline ∨ ~DatabaseConnected)
+      - (ActivateFailover ∨ TriggerMaintenanceMode)
+    # Result: Creates emergency response automation
+    # Business Impact: Ensures business continuity during outages
+
+# ----------------------------------------------------------------------------
+# TARGET VALIDATION: Proof Goals
+# ----------------------------------------------------------------------------
+# The targets section specifies which logical formulas we want our reasoning
+# system to prove. These represent the business conditions and outcomes we
+# need to validate mathematically. A successful proof means the business
+# logic is sound and the conditions can be satisfied.
+
+targets:
+  # ==========================================================================
+  # BASIC LOGICAL CONSTRUCTS VALIDATION
+  # ==========================================================================
+  # These targets validate that fundamental logical operations work correctly
+  
+  # Conjunction Targets - Validate AND logic
+  - (CustomerIdentityVerified ∧ CustomerInGoodStanding)     # Customer verification
+  - (PaymentMethodValid AND SufficientFunds)               # Payment validation (text format)
+  - (InventoryAvailable & ShippingCapacityAvailable)       # Inventory check (ASCII format)
+  - (PrimarySystemsOnline ∧ DatabaseConnected)             # System health
+  
+  # Implication Targets - Validate business rules
+  - (HighRiskTransaction → ApplyFraudHold)                  # Fraud prevention
+  - (TransactionExceedsThreshold IMPLIES InitiateAMLCheck) # Compliance (text format)
+  - ((CustomerIdentityVerified ∧ CustomerInGoodStanding) ∧ (PaymentMethodValid ∧ SufficientFunds)) → ProcessOrder
+  
+  # Disjunction Targets - Validate alternative pathways
+  - (ChargePayment ∨ EscrowFunds)                          # Payment options
+  - ((ChargePayment ∨ EscrowFunds) ∨ RequireManualReview) # Order resolution
+  - (ActivateFailover | TriggerMaintenanceMode)           # Recovery options (ASCII format)
+  
+  # ==========================================================================
+  # CONTRAPOSITION VALIDATION
+  # ==========================================================================
+  # These targets validate logical inversion for risk management
+  
+  - (~ApplyFraudHold → ~HighRiskTransaction)              # Risk assessment logic
+  - (~InitiateAMLCheck → ~TransactionExceedsThreshold)    # Compliance verification
+  
+  # ==========================================================================
+  # DOUBLE NEGATION VALIDATION  
+  # ==========================================================================
+  # These targets validate logical normalization
+  
+  - CustomerInGoodStanding                                 # From double negation elimination
+  - ~~SystemUnderHighLoad                                  # From double negation introduction
+  
+  # ==========================================================================
+  # EQUIVALENCE VALIDATION
+  # ==========================================================================
+  # These targets validate bidirectional relationships
+  
+  - ((CustomerIdentityVerified ∧ CustomerInGoodStanding) ↔ (PaymentMethodValid ∧ SufficientFunds))
+  - (SystemHealthy <-> (PrimarySystemsOnline ∧ DatabaseConnected))  # ASCII format
+  
+  # ==========================================================================
+  # COMPLEX BUSINESS PROCESS VALIDATION
+  # ==========================================================================
+  # These targets validate end-to-end business workflows
+  
+  # Complete Order Processing Workflow
+  - ((CustomerIdentityVerified ∧ CustomerInGoodStanding) ∧ (InventoryAvailable ∧ ShippingCapacityAvailable))
+  - (ProcessOrder ∧ SendConfirmationEmail)
+  - ((CustomerIdentityVerified ∧ CustomerInGoodStanding) ∧ (InventoryAvailable ∧ ShippingCapacityAvailable)) → (ProcessOrder ∧ SendConfirmationEmail)
+  
+  # Emergency Response Procedures
+  - (~PrimarySystemsOnline ∨ ~DatabaseConnected)
+  - (ActivateFailover ∨ TriggerMaintenanceMode)  
+  - ((~PrimarySystemsOnline ∨ ~DatabaseConnected) → (ActivateFailover ∨ TriggerMaintenanceMode))
+  
+  # Business Actions (Final Propositions)
+  - ProcessOrder                                           # Core business outcome
+  - RequireManualReview                                    # Alternative pathway
+  - ApplyFraudHold                                         # Risk mitigation
+  - InitiateAMLCheck                                       # Regulatory compliance
+  - ScaleInfrastructure                                    # Operational response
+  - SendConfirmationEmail                                  # Customer communication
+
+# ============================================================================
+# EDUCATIONAL NOTES FOR DEVELOPERS
+# ============================================================================
+#
+# OPERATOR FORMATS DEMONSTRATED:
+# This scenario uses ALL supported operator formats to show interoperability:
+# - Unicode: ∧ ∨ → ↔ ~ (preferred for formal logic)
+# - Text: AND OR IMPLIES IFF NOT (readable in code reviews)  
+# - ASCII: & | -> <-> <=> ! (compatible with ASCII-only environments)
+#
+# RULE TYPES DEMONSTRATED:
+# - alpha + and: Conjunctions for required conditions
+# - alpha + implies: Business rules and process automation
+# - beta: Alternative pathways and fallback mechanisms
+# - contraposition: Risk assessment and compliance verification  
+# - doubleNegation: Logic normalization and cleanup
+# - equivalence: Bidirectional business relationships
+#
+# ENTERPRISE PATTERNS SHOWN:
+# - Customer verification workflows
+# - Payment processing logic
+# - Fraud detection and risk management
+# - Regulatory compliance automation
+# - System health monitoring
+# - Infrastructure scaling decisions
+# - Emergency response procedures
+# - Business continuity planning
+#
+# BEST PRACTICES DEMONSTRATED:
+# - Layered business logic (simple to complex)
+# - Clear separation of concerns
+# - Comprehensive error handling paths
+# - Audit-friendly logical structures
+# - Scalable reasoning patterns
+# - Real-world business terminology
+# 
+# COMMON ENTERPRISE USE CASES:
+# - Order processing automation
+# - Risk management systems  
+# - Compliance checking
+# - Infrastructure monitoring
+# - Business rule engines
+# - Decision support systems
+# - Audit trail generation
+# - Process optimization
+#
+# ============================================================================

@@ -1,0 +1,21 @@
+propositions:
+  - ActionA
+
+steps:
+  # Invalid rule name
+  - rule: invalidRule
+    from:
+      - UserWantsEuropeanFlight
+
+  # Missing required fields
+  - rule: alpha
+    from:
+      - UserHasVisa
+
+  # Invalid step structure
+  - rule: alpha
+    subtype: and
+    from: UserWantsEuropeanFlight
+
+targets:
+  - ActionA

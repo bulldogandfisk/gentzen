@@ -1,0 +1,30 @@
+propositions:
+  - ActionA
+  - ActionB
+
+steps:
+  # This step should be skipped due to missing facts
+  - rule: alpha
+    subtype: and
+    from:
+      - NonExistentFact1
+      - NonExistentFact2
+
+  # This step should work
+  - rule: alpha
+    subtype: implies
+    from:
+      - UserWantsEuropeanFlight
+      - ActionA
+
+  # This step should be skipped due to missing dependency
+  - rule: alpha
+    subtype: implies
+    from:
+      - (NonExistentFact1 ∧ NonExistentFact2)
+      - ActionB
+
+targets:
+  - (NonExistentFact1 ∧ NonExistentFact2)
+  - ActionA
+  - ActionB

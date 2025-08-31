@@ -1,0 +1,145 @@
+propositions:
+  # The 'propositions' section lists all the named conclusions or goals
+  # that our proof system can target or derive. These typically represent
+  # actions or decisions we may conclude from the given facts.
+  - BookFlight            # Final action: book a flight.
+  - BookHotel             # Final action: book a hotel stay.
+  - BookOperaTickets      # Action: secure tickets for an opera performance.
+  - BookLouvreReservation # Action: reserve entry to the Louvre museum.
+  - StrongCandidateHotel  # Intermediate conclusion: hotel that matches user criteria.
+  - PetFriendlyHotel      # Intermediate conclusion: hotel suitable for traveling with a pet.
+  - RewardsUpgrade        # (Unused) potential upgrade based on hotel rewards.
+  - EuropeanPackageDeal   # Final composite proposition: book a package deal for Europe.
+
+steps:
+  # The 'steps' section encodes the inference rules applied in sequence.
+  # Each step uses a Gentzen-style rule (e.g., alpha, beta, equivalence)
+  # to derive new formulas or break down complex statements.
+
+  # STEP 1: (UserWantsEuropeanFlight ∧ UserHasVisa)
+  # Conjunction decomposition of two facts.
+  - rule: alpha
+    subtype: and
+    from:
+      - UserWantsEuropeanFlight
+      - UserHasVisa
+
+  # STEP 2: ((UserWantsEuropeanFlight ∧ UserHasVisa) → BookFlight)
+  # Encodes: if user wants European flight and has visa, then book flight.
+  - rule: alpha
+    subtype: implies
+    from:
+      - (UserWantsEuropeanFlight ∧ UserHasVisa)
+      - BookFlight
+
+  # STEP 3: (TravelingWithDog → PetFriendlyHotel)
+  # Encodes: traveling with a dog implies need for pet-friendly lodging.
+  - rule: alpha
+    subtype: implies
+    from:
+      - TravelingWithDog
+      - PetFriendlyHotel
+
+  # STEP 4: (UserNeedsPool ∧ UserHasHotelRewards)
+  # Encodes the combination of two preferences as a basis for hotel selection.
+  - rule: alpha
+    subtype: and
+    from:
+      - UserNeedsPool
+      - UserHasHotelRewards
+
+  # STEP 5: ((UserNeedsPool ∧ UserHasHotelRewards) → StrongCandidateHotel)
+  # If the user needs a pool and holds rewards, we identify strong candidate hotels.
+  - rule: alpha
+    subtype: implies
+    from:
+      - (UserNeedsPool ∧ UserHasHotelRewards)
+      - StrongCandidateHotel
+
+  # STEP 6: (UserHasBudget → BookHotel)
+  # If the user has budget, then proceed to book hotel.
+  - rule: alpha
+    subtype: implies
+    from:
+      - UserHasBudget
+      - BookHotel
+
+  # STEP 7: (UserHasOperaInterest → BookOperaTickets)
+  # Captures: user interest in opera leads to securing tickets.
+  - rule: alpha
+    subtype: implies
+    from:
+      - UserHasOperaInterest
+      - BookOperaTickets
+
+  # STEP 8: (UserWantsCulturalActivities ∧ WantsLouvreVisit)
+  # Combines two cultural preferences to target a museum reservation.
+  - rule: alpha
+    subtype: and
+    from:
+      - UserWantsCulturalActivities
+      - WantsLouvreVisit
+
+  # STEP 9: ((UserWantsCulturalActivities ∧ WantsLouvreVisit) → BookLouvreReservation)
+  # If user seeks culture and Louvre, then reserve Louvre visit.
+  - rule: alpha
+    subtype: implies
+    from:
+      - (UserWantsCulturalActivities ∧ WantsLouvreVisit)
+      - BookLouvreReservation
+
+  # STEP 10: Beta => (BookFlight ∨ BookHotel)
+  # Beta rules handle branching (∨) by introducing scenarios for each alternative.
+  - rule: beta
+    from:
+      - BookFlight
+      - BookHotel
+
+  # STEP 11: Beta => from (BookFlight ∨ BookHotel) and BookOperaTickets
+  # produces ((BookFlight ∨ BookHotel) ∨ BookOperaTickets)
+  # A new disjunction: either flight-or-hotel or opera ticket booking.
+  - rule: beta
+    from:
+      - (BookFlight ∨ BookHotel)
+      - BookOperaTickets
+
+  # STEP 12: Alpha => ((BookFlight ∨ BookHotel) ∨ BookOperaTickets) → EuropeanPackageDeal
+  # If any of flight, hotel, or opera bookings occur, recommend the European package.
+  - rule: alpha
+    subtype: implies
+    from:
+      - ((BookFlight ∨ BookHotel) ∨ BookOperaTickets)
+      - EuropeanPackageDeal
+
+  # STEP 13: Contraposition => from (UserHasBudget → BookHotel) => (~BookHotel → ~UserHasBudget)
+  # Demonstrates the transformation: (p → q) becomes (¬q → ¬p).
+  - rule: contraposition
+    from:
+      - (UserHasBudget → BookHotel)
+
+  # STEP 14: Double Negation => on "UserHasVisa" => ~~UserHasVisa
+  # Illustrates that any statement p entails ¬¬p under classical logic.
+  - rule: doubleNegation
+    subtype: introduction
+    from:
+      - UserHasVisa
+
+  # STEP 15: Equivalence => (TravelingWithDog ↔ PetFriendlyHotel)
+  # Establishes bi-directional implication: p ↔ q means (p → q) ∧ (q → p).
+  - rule: equivalence
+    from:
+      - TravelingWithDog
+      - PetFriendlyHotel
+
+targets:
+  # The 'targets' section lists the key formulas we aim to derive or verify
+  # through this sequence of inference steps. Reaching each target indicates
+  # that the proof has successfully modeled the desired reasoning path.
+  - (UserWantsEuropeanFlight ∧ UserHasVisa)                   # Target: conjunction of travel desire and visa.
+  - ((UserWantsEuropeanFlight ∧ UserHasVisa) → BookFlight)    # Target: booking implication.
+  - ((BookFlight ∨ BookHotel) ∨ BookOperaTickets)             # Target: full disjunction of booking actions.
+  - (UserHasBudget → BookHotel)                               # Target: budget-to-hotel booking implication.
+  - (~BookHotel → ~UserHasBudget)                             # Target: contraposition result.
+  - ~~UserHasVisa                                             # Target: double-negated visa fact.
+  - EuropeanPackageDeal                                       # Target: final package deal proposition.
+  - (TravelingWithDog ↔ PetFriendlyHotel)                     # Target: equivalence between pet requirement and hotel suitability.

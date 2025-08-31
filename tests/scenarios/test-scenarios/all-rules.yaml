@@ -1,0 +1,58 @@
+propositions:
+  - ActionA
+  - ActionB
+  - ActionC
+  - ActionD
+  - ActionE
+
+steps:
+  # Alpha rule - AND
+  - rule: alpha
+    subtype: and
+    from:
+      - UserWantsEuropeanFlight
+      - UserHasVisa
+
+  # Alpha rule - IMPLIES
+  - rule: alpha
+    subtype: implies
+    from:
+      - (UserWantsEuropeanFlight ∧ UserHasVisa)
+      - ActionA
+
+  # Beta rule - OR
+  - rule: beta
+    from:
+      - ActionA
+      - ActionB
+
+  # Contraposition
+  - rule: contraposition
+    from:
+      - ((UserWantsEuropeanFlight ∧ UserHasVisa) → ActionA)
+
+  # Double Negation - Introduction
+  - rule: doubleNegation
+    subtype: introduction
+    from:
+      - UserHasVisa
+
+  # Double Negation - Elimination
+  - rule: doubleNegation
+    subtype: elimination
+    from:
+      - ~~UserHasVisa
+
+  # Equivalence
+  - rule: equivalence
+    from:
+      - UserWantsEuropeanFlight
+      - ActionC
+
+targets:
+  - (UserWantsEuropeanFlight ∧ UserHasVisa)
+  - ActionA
+  - (ActionA ∨ ActionB)
+  - (~ActionA → ~(UserWantsEuropeanFlight ∧ UserHasVisa))
+  - ~~UserHasVisa
+  - (UserWantsEuropeanFlight ↔ ActionC)

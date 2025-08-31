@@ -1,0 +1,39 @@
+propositions:
+  - ProcessOrder
+  - SendAlert
+  - ScheduleMaintenance
+
+steps:
+  # Business logic: Customer + Payment
+  - rule: alpha
+    subtype: and
+    from:
+      - CustomerIsVIP
+      - PaymentProcessed
+
+  # System check: Health + Time
+  - rule: alpha
+    subtype: and
+    from:
+      - SystemHealthy
+      - IsBusinessHours
+
+  # Combined business decision
+  - rule: alpha
+    subtype: implies
+    from:
+      - (CustomerIsVIP ∧ PaymentProcessed)
+      - ProcessOrder
+
+  # System maintenance decision
+  - rule: alpha
+    subtype: implies
+    from:
+      - (SystemHealthy ∧ IsBusinessHours)
+      - ScheduleMaintenance
+
+targets:
+  - (CustomerIsVIP ∧ PaymentProcessed)
+  - (SystemHealthy ∧ IsBusinessHours)
+  - ProcessOrder
+  - ScheduleMaintenance

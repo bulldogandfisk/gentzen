@@ -1,0 +1,12 @@
+propositions:
+  - SimpleAction
+
+steps:
+  - rule: alpha
+    subtype: implies
+    from:
+      - UserWantsEuropeanFlight
+      - SimpleAction
+
+targets:
+  - SimpleAction

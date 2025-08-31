@@ -1,0 +1,39 @@
+propositions:
+  - SystemAlert
+  - PerformMaintenance
+  - SendNotification
+  - ScheduleBackup
+
+steps:
+  # STEP 1: (SystemHealthy ∧ DatabaseConnected)
+  - rule: alpha
+    subtype: and
+    from:
+      - SystemHealthy
+      - DatabaseConnected
+
+  # STEP 2: ((SystemHealthy ∧ DatabaseConnected) → SystemAlert)
+  - rule: alpha
+    subtype: implies
+    from:
+      - (SystemHealthy ∧ DatabaseConnected)
+      - SystemAlert
+
+  # STEP 3: (BackupCompleted → ScheduleBackup)
+  - rule: alpha
+    subtype: implies
+    from:
+      - BackupCompleted
+      - ScheduleBackup
+
+  # STEP 4: (SecurityScanPassed ∧ DiskSpaceAvailable)
+  - rule: alpha
+    subtype: and
+    from:
+      - SecurityScanPassed
+      - DiskSpaceAvailable
+
+targets:
+  - (SystemHealthy ∧ DatabaseConnected)
+  - ((SystemHealthy ∧ DatabaseConnected) → SystemAlert)
+  - (SecurityScanPassed ∧ DiskSpaceAvailable)

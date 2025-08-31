@@ -1,0 +1,42 @@
+{
+  "name": "agents-testing",
+  "version": "1.0.0",
+  "license": "SSPL-1.0",
+  "description": "Formal reasoning for agents",
+  "type": "module",
+  "engines": {
+    "node": ">=22.x"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bulldogandfisk/gentzen"
+  },
+  "bugs": {
+    "url": "https://github.com/bulldogandfisk/gentzen/issues",
+    "email": "contact@bulldogandfisk.com"
+  },
+  "homepage": "https://github.com/bulldogandfisk/gentzen",
+  "author": {
+    "name": "Sandro Pasquali",
+    "email": "spasquali@gmail.com",
+    "url": "https://www.linkedin.com/in/sandro-pasquali-87812b1"
+  },
+  "scripts": {
+    "outdated": "yarn upgrade-interactive",
+    "test": "ava --verbose && yarn test:examples",
+    "test:unit": "ava tests/unit/**/*.test.js",
+    "test:integration": "ava tests/integration/**/*.test.js",
+    "test:performance": "ava tests/performance/**/*.test.js",
+    "test:examples": "node examples/run-all-examples.js",
+    "test:watch": "ava --watch"
+  },
+  "dependencies": {
+    "chalk": "^5.6.0",
+    "glob": "^11.0.3",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "ava": "^6.4.1"
+  },
+  "packageManager": "yarn@4.5.3"
+}

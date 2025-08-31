@@ -1,0 +1,48 @@
+# Advanced Negation Demo
+# Shows double negation, contraposition, and complex negated formulas
+
+propositions:
+  - AllowAccess
+  - DenyAccess
+  - RequireAuth
+  - GrantFullPermissions
+
+steps:
+  # Step 1: Apply double negation elimination (~~DatabaseConnected -> DatabaseConnected)
+  - rule: doubleNegation
+    subtype: elimination
+    from:
+      - ~~DatabaseConnected
+      
+  # Step 2: Create implication (UserIsAdmin -> AllowAccess)  
+  - rule: alpha
+    subtype: implies
+    from:
+      - UserIsAdmin
+      - AllowAccess
+      
+  # Step 3: Apply contraposition to get (~AllowAccess -> ~UserIsAdmin)
+  - rule: contraposition
+    from:
+      - (UserIsAdmin → AllowAccess)
+      
+  # Step 4: Combine admin status with security
+  - rule: alpha
+    subtype: and
+    from:
+      - UserIsAdmin
+      - SystemSecure
+      
+  # Step 5: Admin + Security implies full permissions
+  - rule: alpha
+    subtype: implies
+    from:
+      - (UserIsAdmin ∧ SystemSecure)
+      - GrantFullPermissions
+
+targets:
+  - DatabaseConnected                    # From double negation elimination
+  - AllowAccess                         # From admin status
+  - GrantFullPermissions                # From admin + security
+  - (~AllowAccess → ~UserIsAdmin)       # From contraposition
+  - (UserIsAdmin ∧ SystemSecure)        # Conjunction

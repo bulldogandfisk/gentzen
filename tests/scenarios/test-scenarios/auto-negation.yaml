@@ -1,0 +1,64 @@
+# Auto-Negation Test Scenario
+# Tests that false resolvers automatically make negated facts available
+
+propositions:
+  - AccessGranted
+  - AccessDenied
+  - SystemReady
+  - MaintenanceRequired
+
+steps:
+  # Test that auto-negated facts work in conjunctions
+  - rule: alpha
+    subtype: and
+    from:
+      - ~UserHasPermission    # Auto-generated from false resolver
+      - SecurityEnabled       # From true resolver
+      
+  # Test implication with auto-negated fact
+  - rule: alpha
+    subtype: implies
+    from:
+      - (~UserHasPermission ∧ SecurityEnabled)
+      - AccessDenied
+      
+  # Test that positive facts work normally
+  - rule: alpha
+    subtype: and
+    from:
+      - AdminLoggedIn         # From true resolver
+      - SystemOnline          # From true resolver
+      
+  # Test implication with positive facts
+  - rule: alpha
+    subtype: implies
+    from:
+      - (AdminLoggedIn ∧ SystemOnline)
+      - AccessGranted
+      
+  # Test mixed positive and negative facts
+  - rule: alpha
+    subtype: and
+    from:
+      - SystemOnline          # From true resolver
+      - ~MaintenanceMode      # Auto-generated from false resolver
+      
+  # Test complex implication
+  - rule: alpha
+    subtype: implies
+    from:
+      - (SystemOnline ∧ ~MaintenanceMode)
+      - SystemReady
+
+targets:
+  # Should be provable with auto-negation
+  - (~UserHasPermission ∧ SecurityEnabled)    # Auto-negated + positive
+  - AccessDenied                               # From implication
+  - (AdminLoggedIn ∧ SystemOnline)             # Both positive
+  - AccessGranted                              # From positive implication
+  - (SystemOnline ∧ ~MaintenanceMode)         # Positive + auto-negated
+  - SystemReady                                # From mixed implication
+  
+  # Should fail - trying to prove positive facts that resolved false
+  - UserHasPermission                          # Should be missing
+  - MaintenanceMode                            # Should be missing
