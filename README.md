@@ -1,5 +1,7 @@
 # Who This Is For: Agent Pre-Condition Validation
 
+Use of Gentzen-like reasoning system to help agents make confident conclusions about the world.
+
 ## The Agent Safety Problem
 
 You're building agent systems that take real actions in the world. Before any agent runs, you need to **prove the world is in a safe state**. But current approaches are brittle, error-prone, and impossible to audit.

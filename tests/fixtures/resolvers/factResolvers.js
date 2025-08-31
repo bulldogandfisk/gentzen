@@ -38,14 +38,3 @@ export const travelFactResolvers = {
     }
 };
 
-// Helper function to create custom fact resolvers
-export function createFactResolver(name, checkFunction) {
-    return {
-        [name]: checkFunction
-    };
-}
-
-// Helper function to combine multiple resolver sets
-export function combineResolvers(...resolverSets) {
-    return Object.assign({}, ...resolverSets);
-}

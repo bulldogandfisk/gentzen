@@ -36,12 +36,3 @@ export const travelFactResolvers = {
     }
 };
 
-export function createFactResolver(name, checkFunction) {
-    return {
-        [name]: checkFunction
-    };
-}
-
-export function combineResolvers(...resolverSets) {
-    return Object.assign({}, ...resolverSets);
-}
