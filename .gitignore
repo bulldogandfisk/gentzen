@@ -31,8 +31,6 @@ pdm.lock
 .claude
 CLAUDE*
 
-.fisk
-
 .vscode
 .idea
 *.iml
