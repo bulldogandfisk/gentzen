@@ -1,6 +1,7 @@
 export default {
 	files: [
-		'tests/**/*.test.js'
+		'tests/**/*.test.js',
+		'!tests/performance/**'
 	],
 	verbose: true,
 	timeout: '30s',

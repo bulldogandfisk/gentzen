@@ -213,6 +213,65 @@ test('parser throws error for invalid formulas', t => {
     }, { message: /Unexpected character/ });
 });
 
+// validateFormulaSyntax and getParseInfo tests
+import { validateFormulaSyntax, getParseInfo } from '../../utilities/formulaParser.js';
+import { getCanonicalOperator, isOperator } from '../../utilities/formulaLexer.js';
+
+test('validateFormulaSyntax - valid formula returns isValid true', t => {
+    const result = validateFormulaSyntax('A ∧ B');
+    t.true(result.isValid);
+    t.deepEqual(result.errors, []);
+});
+
+test('validateFormulaSyntax - invalid formula returns isValid false with position', t => {
+    const result = validateFormulaSyntax('A ∧');
+    t.false(result.isValid);
+    t.true(result.errors.length > 0);
+    t.is(typeof result.position, 'number');
+});
+
+test('getParseInfo - valid formula returns success with tokens and ast', t => {
+    const result = getParseInfo('A ∧ B');
+    t.true(result.success);
+    t.true(result.tokens.length > 0);
+    t.truthy(result.ast);
+    t.deepEqual(result.errors, []);
+});
+
+test('getParseInfo - invalid formula returns success false', t => {
+    const result = getParseInfo('A ∧');
+    t.false(result.success);
+    t.is(result.ast, null);
+    t.true(result.errors.length > 0);
+});
+
+test('getCanonicalOperator - maps operator aliases', t => {
+    t.is(getCanonicalOperator('∧'), 'and');
+    t.is(getCanonicalOperator('AND'), 'and');
+    t.is(getCanonicalOperator('&'), 'and');
+    t.is(getCanonicalOperator('→'), 'implies');
+    t.is(getCanonicalOperator('~'), 'not');
+    // Unknown operator returns itself
+    t.is(getCanonicalOperator('unknown'), 'unknown');
+});
+
+test('isOperator - true for valid operators, false for invalid', t => {
+    t.true(isOperator('∧'));
+    t.true(isOperator('AND'));
+    t.true(isOperator('~'));
+    t.true(isOperator('→'));
+    t.false(isOperator('FOO'));
+    t.false(isOperator('x'));
+});
+
+test('ParseError has position and name properties', t => {
+    const tokens = tokenize('A ∧');
+    const parser = new FormulaParser(tokens);
+    const error = t.throws(() => parser.parse(), { instanceOf: ParseError });
+    t.is(typeof error.position, 'number');
+    t.is(error.name, 'ParseError');
+});
+
 // Integration tests with existing scenarios
 test('parser handles formulas from existing scenarios', t => {
     const formulas = [

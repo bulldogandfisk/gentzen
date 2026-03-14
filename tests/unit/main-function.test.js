@@ -2,7 +2,7 @@
 
 import test from 'ava';
 import { join } from 'node:path';
-import { runGentzenReasoning } from '../../main.js';
+import { runGentzenReasoning, displayResults } from '../../main.js';
 import { allMockResolvers } from '../scenarios/test-resolvers/mockResolvers.js';
 import { assertScenarioStructure, assertContains } from '../helpers/test-helpers.js';
 
@@ -131,6 +131,71 @@ test('runGentzenReasoning - results structure validation', async t => {
     for (const field of summaryFields) {
         t.true(field in results.summary, `Missing summary field: ${field}`);
     }
+});
+
+test('runGentzenReasoning - validate option on valid scenario succeeds', async t => {
+    const scenarioPath = join(testScenariosPath, 'minimal.yaml');
+    const results = await runGentzenReasoning(scenarioPath, {
+        customResolvers: allMockResolvers,
+        validate: true
+    });
+
+    assertScenarioStructure(t, results);
+    t.true(results.targets.length > 0);
+});
+
+test('runGentzenReasoning - validate option on scenario with issues still runs', async t => {
+    const scenarioPath = join(testScenariosPath, 'missing-facts.yaml');
+    const results = await runGentzenReasoning(scenarioPath, {
+        customResolvers: allMockResolvers,
+        validate: true
+    });
+
+    assertScenarioStructure(t, results);
+});
+
+test('runGentzenReasoning - selectiveResolution with resolversPath', async t => {
+    const scenarioPath = join(testScenariosPath, 'minimal.yaml');
+    const results = await runGentzenReasoning(scenarioPath, {
+        resolversPath: testResolversPath,
+        selectiveResolution: true
+    });
+
+    assertScenarioStructure(t, results);
+});
+
+test('runGentzenReasoning - selectiveResolution without resolversPath does not break', async t => {
+    const scenarioPath = join(testScenariosPath, 'minimal.yaml');
+    const results = await runGentzenReasoning(scenarioPath, {
+        customResolvers: allMockResolvers,
+        selectiveResolution: true
+    });
+
+    assertScenarioStructure(t, results);
+});
+
+test('displayResults - verbose false runs without error', async t => {
+    const scenarioPath = join(testScenariosPath, 'minimal.yaml');
+    const results = await runGentzenReasoning(scenarioPath, {
+        customResolvers: allMockResolvers
+    });
+
+    t.notThrows(() => {
+        displayResults(results, { verbose: false });
+    });
+});
+
+test('displayResults - empty targets runs without error', async t => {
+    const scenarioPath = join(testScenariosPath, 'minimal.yaml');
+    const results = await runGentzenReasoning(scenarioPath, {
+        customResolvers: allMockResolvers
+    });
+
+    // Override targets to empty to test edge case
+    const modifiedResults = { ...results, targets: [] };
+    t.notThrows(() => {
+        displayResults(modifiedResults, { verbose: false });
+    });
 });
 
 test('runGentzenReasoning - target results structure', async t => {
