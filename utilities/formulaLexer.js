@@ -53,6 +53,9 @@ export class Token {
     }
 }
 
+// Pre-sorted operator keys (longest first) for efficient matching
+const SORTED_OPERATOR_KEYS = Object.keys(OPERATOR_MAPPINGS).sort((a, b) => b.length - a.length);
+
 // Lexer class
 export class FormulaLexer {
     constructor(input) {
@@ -106,11 +109,8 @@ export class FormulaLexer {
         
         // Try to match longest possible operator first
         const remaining = this.input.slice(this.position);
-        
-        // Sort by length descending to match longest operators first
-        const operators = Object.keys(OPERATOR_MAPPINGS).sort((a, b) => b.length - a.length);
-        
-        for (const op of operators) {
+
+        for (const op of SORTED_OPERATOR_KEYS) {
             if (remaining.startsWith(op)) {
                 result = op;
                 // Advance position by operator length
@@ -135,9 +135,7 @@ export class FormulaLexer {
         if (!this.current_char) return false;
         
         const remaining = this.input.slice(this.position);
-        const operators = Object.keys(OPERATOR_MAPPINGS);
-        
-        return operators.some(op => remaining.startsWith(op));
+        return SORTED_OPERATOR_KEYS.some(op => remaining.startsWith(op));
     }
     
     // Get the next token

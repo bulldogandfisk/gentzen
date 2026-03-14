@@ -1,18 +1,18 @@
-import fs from 'node:fs';
+import fs from 'fs-extra';
 import yaml from 'yaml';
 import { createLogger } from './utilities/logger.js';
 import { getConfigSection } from './utilities/config.js';
 
 // Simple validation function for scenarios.
 // @param {string} scenarioPath - Path to YAML scenario file.
-// @returns {Object} Validation results.
+// @returns {Promise<Object>} Validation results.
 //
-export function validateScenario(scenarioPath) {
+export async function validateScenario(scenarioPath) {
     const errors = [];
     const warnings = [];
-    
+
     try {
-        const content = fs.readFileSync(scenarioPath, 'utf8');
+        const content = await fs.readFile(scenarioPath, 'utf8');
         const scenario = yaml.parse(content);
 
         // 1. Check required fields.
@@ -131,15 +131,15 @@ export function validateScenario(scenarioPath) {
 // @param {string} scenarioPath - Path to scenario file
 // @param {boolean} verbose - Show detailed output
 //
-export function validateAndDisplay(scenarioPath, verbose = false) {
+export async function validateAndDisplay(scenarioPath, verbose = false) {
     const logConfig = getConfigSection('logging');
     const logger = createLogger(logConfig);
-    
+
     if (verbose) {
         logger.info(`🔍 Validating: ${scenarioPath}`);
     }
-    
-    const results = validateScenario(scenarioPath);
+
+    const results = await validateScenario(scenarioPath);
     
     if (results.errors.length > 0) {
         logger.error('❌ ERRORS:');

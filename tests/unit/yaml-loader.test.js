@@ -10,8 +10,9 @@ const testScenariosPath = join(testDir, '../scenarios/test-scenarios');
 
 test('loadGentzenScenario - minimal scenario', async t => {
         const scenarioPath = join(testScenariosPath, 'minimal.yaml');
-        const { system, targets, referencedAtoms } = await loadGentzenScenario(scenarioPath, allMockResolvers);
-        
+        const factMap = await runFactResolvers(allMockResolvers);
+        const { system, targets, referencedAtoms } = await loadGentzenScenario(scenarioPath, factMap);
+
         t.true(system !== null);
         t.true(Array.isArray(targets));
         t.true(targets.length > 0);
@@ -21,19 +22,21 @@ test('loadGentzenScenario - minimal scenario', async t => {
 
 test('loadGentzenScenario - all rules scenario', async t => {
         const scenarioPath = join(testScenariosPath, 'all-rules.yaml');
-        const { system, targets, referencedAtoms } = await loadGentzenScenario(scenarioPath, allMockResolvers);
-        
+        const factMap = await runFactResolvers(allMockResolvers);
+        const { system, targets, referencedAtoms } = await loadGentzenScenario(scenarioPath, factMap);
+
         t.true(system !== null);
         t.true(Array.isArray(targets));
-        t.true(targets.length >= 6); // We have 6 targets in all-rules.yaml
+        t.true(targets.length >= 6);
         t.true(referencedAtoms.has('UserWantsEuropeanFlight'));
         t.true(referencedAtoms.has('UserHasVisa'));
 });
 
 test('loadGentzenScenario - missing facts scenario', async t => {
         const scenarioPath = join(testScenariosPath, 'missing-facts.yaml');
-        const { system, targets, referencedAtoms } = await loadGentzenScenario(scenarioPath, allMockResolvers);
-        
+        const factMap = await runFactResolvers(allMockResolvers);
+        const { system, targets, referencedAtoms } = await loadGentzenScenario(scenarioPath, factMap);
+
         t.true(system !== null);
         t.true(Array.isArray(targets));
         t.true(system.skippedSteps.length > 0);
@@ -44,13 +47,13 @@ test('loadGentzenScenario - missing facts scenario', async t => {
 
 test('loadGentzenScenario - invalid syntax handling', async t => {
         const scenarioPath = join(testScenariosPath, 'invalid-syntax.yaml');
-        
+        const factMap = await runFactResolvers(allMockResolvers);
+
         // This should not throw an error, but should handle invalid syntax gracefully
-        const { system, targets } = await loadGentzenScenario(scenarioPath, allMockResolvers);
-        
+        const { system, targets } = await loadGentzenScenario(scenarioPath, factMap);
+
         t.true(system !== null);
         t.true(Array.isArray(targets));
-        // Invalid steps should be skipped, not crash the system
 });
 
 test('loadGentzenScenario - empty fact resolvers', async t => {
@@ -104,25 +107,25 @@ test('runFactResolvers - empty resolvers', async t => {
 
 test('loadGentzenScenario - fact resolution integration', async t => {
         const scenarioPath = join(testScenariosPath, 'minimal.yaml');
-        const factResolvers = {
+        const factMap = await runFactResolvers({
             UserWantsEuropeanFlight: () => true,
             SomeOtherFact: () => false
-        };
-        
-        const { system } = await loadGentzenScenario(scenarioPath, factResolvers);
-        
+        });
+
+        const { system } = await loadGentzenScenario(scenarioPath, factMap);
+
         t.true(system.isFactAvailable('UserWantsEuropeanFlight'));
         t.false(system.isFactAvailable('SomeOtherFact'));
 });
 
 test('loadGentzenScenario - step processing with available facts', async t => {
         const scenarioPath = join(testScenariosPath, 'minimal.yaml');
-        const factResolvers = {
+        const factMap = await runFactResolvers({
             UserWantsEuropeanFlight: () => true
-        };
-        
-        const { system } = await loadGentzenScenario(scenarioPath, factResolvers);
-        
+        });
+
+        const { system } = await loadGentzenScenario(scenarioPath, factMap);
+
         t.true(system.steps.length > 0);
         t.true(system.facts.has('UserWantsEuropeanFlight'));
 });

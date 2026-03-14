@@ -8,7 +8,7 @@ import { getConfigSection } from './utilities/config.js';
 import { addFormulaAtomsToSet } from './utilities/formulaUtils.js';
 
 // Collect all atomic propositions that are referenced (but don't validate)
-function collectReferencedAtoms(scenario) {
+export function collectReferencedAtoms(scenario) {
     const referencedAtoms = new Set();
 
     // Collect from propositions
@@ -40,25 +40,27 @@ function collectReferencedAtoms(scenario) {
 }
 
 // Load a Gentzen scenario from YAML and build the proof system
-export async function loadGentzenScenario(yamlPath, factResolvers = {}, options = {}) {
+// @param {string} yamlPath - Path to YAML scenario file
+// @param {Object} factMap - Pre-resolved fact map (name → boolean), as returned by runFactResolvers()
+//
+export async function loadGentzenScenario(yamlPath, factMap = {}, options = {}) {
     // Create logger for this operation
     const logConfig = getConfigSection('logging');
     const logger = createLogger(logConfig);
-    
+
     const fileContent = await readFile(yamlPath, 'utf8');
     const scenario = YAML.parse(fileContent);
 
     const referencedAtoms = collectReferencedAtoms(scenario);
     const system = new GentzenSystem(options);
 
-    // Add dynamic facts from resolvers
-    if (factResolvers && typeof factResolvers === 'object') {
-        const factMap = await runFactResolvers(factResolvers);
+    // Populate system facts from pre-resolved fact map
+    if (factMap && typeof factMap === 'object') {
         for (const [factName, isResolved] of Object.entries(factMap)) {
             if (isResolved) {
-                system.addFact(factName);        // Add positive fact
+                system.addFact(factName);
             } else if (!factName.startsWith('~')) {
-                system.addFact(`~${factName}`);  // Add negated fact for false resolvers
+                system.addFact(`~${factName}`);
             }
         }
     }
@@ -82,7 +84,7 @@ export async function loadGentzenScenario(yamlPath, factResolvers = {}, options 
             const stepObjects = [];
             
             for (const formula of from) {
-                if ([...system.facts].includes(formula)) {
+                if (system.facts.has(formula)) {
                     stepObjects.push({
                         origin: 'FactRef',
                         ruleType: 'factRef',

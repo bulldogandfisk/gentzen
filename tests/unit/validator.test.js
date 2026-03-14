@@ -20,9 +20,9 @@ function createTempScenario(content) {
     return tmpFile;
 }
 
-test('validateScenario - valid scenario returns isValid true', t => {
+test('validateScenario - valid scenario returns isValid true', async t => {
     const scenarioPath = join(testScenariosPath, 'minimal.yaml');
-    const result = validateScenario(scenarioPath);
+    const result = await validateScenario(scenarioPath);
 
     t.true(result.isValid);
     t.deepEqual(result.errors, []);
@@ -30,119 +30,119 @@ test('validateScenario - valid scenario returns isValid true', t => {
     t.is(typeof result.summary, 'string');
 });
 
-test('validateScenario - missing targets field returns error', t => {
+test('validateScenario - missing targets field returns error', async t => {
     const tmpFile = createTempScenario(`steps:${EOL}  - rule: alpha${EOL}    from:${EOL}      - A${EOL}      - B${EOL}`);
-    const result = validateScenario(tmpFile);
+    const result = await validateScenario(tmpFile);
 
     t.false(result.isValid);
     t.true(result.errors.some(e => e.includes('targets')));
 });
 
-test('validateScenario - empty targets array returns error', t => {
+test('validateScenario - empty targets array returns error', async t => {
     const tmpFile = createTempScenario(`targets: []${EOL}`);
-    const result = validateScenario(tmpFile);
+    const result = await validateScenario(tmpFile);
 
     t.false(result.isValid);
     t.true(result.errors.some(e => e.includes('targets')));
 });
 
-test('validateScenario - non-string target returns error', t => {
+test('validateScenario - non-string target returns error', async t => {
     const tmpFile = createTempScenario(`targets:${EOL}  - 123${EOL}`);
-    const result = validateScenario(tmpFile);
+    const result = await validateScenario(tmpFile);
 
     t.false(result.isValid);
     t.true(result.errors.some(e => e.includes('Target')));
 });
 
-test('validateScenario - steps not an array returns error', t => {
+test('validateScenario - steps not an array returns error', async t => {
     const tmpFile = createTempScenario(`targets:${EOL}  - A${EOL}steps: "not an array"${EOL}`);
-    const result = validateScenario(tmpFile);
+    const result = await validateScenario(tmpFile);
 
     t.false(result.isValid);
     t.true(result.errors.length > 0);
 });
 
-test('validateScenario - step missing rule field returns error', t => {
+test('validateScenario - step missing rule field returns error', async t => {
     const tmpFile = createTempScenario(`targets:${EOL}  - A${EOL}steps:${EOL}  - from:${EOL}      - A${EOL}      - B${EOL}`);
-    const result = validateScenario(tmpFile);
+    const result = await validateScenario(tmpFile);
 
     t.false(result.isValid);
     t.true(result.errors.some(e => e.includes('missing "rule"')));
 });
 
-test('validateScenario - step missing from array returns error', t => {
+test('validateScenario - step missing from array returns error', async t => {
     const tmpFile = createTempScenario(`targets:${EOL}  - A${EOL}steps:${EOL}  - rule: alpha${EOL}`);
-    const result = validateScenario(tmpFile);
+    const result = await validateScenario(tmpFile);
 
     t.false(result.isValid);
     t.true(result.errors.some(e => e.includes('missing "from"')));
 });
 
-test('validateScenario - propositions not an array returns error', t => {
+test('validateScenario - propositions not an array returns error', async t => {
     const tmpFile = createTempScenario(`targets:${EOL}  - A${EOL}propositions: "not an array"${EOL}`);
-    const result = validateScenario(tmpFile);
+    const result = await validateScenario(tmpFile);
 
     t.false(result.isValid);
     t.true(result.errors.some(e => e.includes('Propositions must be an array')));
 });
 
-test('validateScenario - non-string proposition returns error', t => {
+test('validateScenario - non-string proposition returns error', async t => {
     const tmpFile = createTempScenario(`targets:${EOL}  - A${EOL}propositions:${EOL}  - 42${EOL}`);
-    const result = validateScenario(tmpFile);
+    const result = await validateScenario(tmpFile);
 
     t.false(result.isValid);
     t.true(result.errors.some(e => e.includes('Proposition') && e.includes('string')));
 });
 
-test('validateScenario - duplicate proposition name returns error', t => {
+test('validateScenario - duplicate proposition name returns error', async t => {
     const tmpFile = createTempScenario(`targets:${EOL}  - A${EOL}propositions:${EOL}  - Foo${EOL}  - Foo${EOL}`);
-    const result = validateScenario(tmpFile);
+    const result = await validateScenario(tmpFile);
 
     t.false(result.isValid);
     t.true(result.errors.some(e => e.includes('Duplicate proposition')));
 });
 
-test('validateScenario - non-PascalCase proposition returns warning', t => {
+test('validateScenario - non-PascalCase proposition returns warning', async t => {
     const tmpFile = createTempScenario(`targets:${EOL}  - A${EOL}propositions:${EOL}  - lowercase${EOL}`);
-    const result = validateScenario(tmpFile);
+    const result = await validateScenario(tmpFile);
 
     t.true(result.warnings.some(w => w.includes('PascalCase')));
 });
 
-test('validateScenario - unbalanced parentheses in formula returns error', t => {
+test('validateScenario - unbalanced parentheses in formula returns error', async t => {
     const tmpFile = createTempScenario(`targets:${EOL}  - "(A ∧ B"${EOL}`);
-    const result = validateScenario(tmpFile);
+    const result = await validateScenario(tmpFile);
 
     t.false(result.isValid);
     t.true(result.errors.some(e => e.includes('unbalanced parentheses')));
 });
 
-test('validateScenario - compound formula without parentheses returns warning', t => {
+test('validateScenario - compound formula without parentheses returns warning', async t => {
     const tmpFile = createTempScenario(`targets:${EOL}  - "A ∧ B"${EOL}`);
-    const result = validateScenario(tmpFile);
+    const result = await validateScenario(tmpFile);
 
     t.true(result.warnings.some(w => w.includes('parentheses')));
 });
 
-test('validateScenario - nonexistent file returns parse error', t => {
-    const result = validateScenario('/tmp/nonexistent-scenario-file.yaml');
+test('validateScenario - nonexistent file returns parse error', async t => {
+    const result = await validateScenario('/tmp/nonexistent-scenario-file.yaml');
 
     t.false(result.isValid);
     t.true(result.errors.some(e => e.includes('Failed to parse')));
     t.is(result.summary, 'File parsing failed');
 });
 
-test('validateAndDisplay - returns results for valid scenario', t => {
+test('validateAndDisplay - returns results for valid scenario', async t => {
     const scenarioPath = join(testScenariosPath, 'minimal.yaml');
-    const result = validateAndDisplay(scenarioPath);
+    const result = await validateAndDisplay(scenarioPath);
 
     t.true(result.isValid);
     t.deepEqual(result.errors, []);
 });
 
-test('validateAndDisplay - returns results for invalid scenario', t => {
+test('validateAndDisplay - returns results for invalid scenario', async t => {
     const tmpFile = createTempScenario(`steps:${EOL}  - rule: alpha${EOL}`);
-    const result = validateAndDisplay(tmpFile, true);
+    const result = await validateAndDisplay(tmpFile, true);
 
     t.false(result.isValid);
     t.true(result.errors.length > 0);

@@ -30,9 +30,15 @@
     "test:examples": "node examples/run-all-examples.js",
     "test:watch": "ava --watch"
   },
+  "exports": {
+    ".": "./main.js",
+    "./validator": "./validator.js",
+    "./config": "./utilities/config.js"
+  },
   "dependencies": {
     "chalk": "^5.6.0",
     "fast-glob": "^3.3.3",
+    "fs-extra": "^11.3.4",
     "yaml": "^2.8.1"
   },
   "devDependencies": {

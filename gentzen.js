@@ -1,26 +1,35 @@
 // gentzen.js
+//
 
 import { parseFormulaFromString } from './utilities/formulaParser.js';
-import { 
-    astToString as astToStringImpl, 
-    normalizeAST, 
+import {
+    astToString as astToStringImpl,
+    normalizeAST,
     getAtoms,
     isImplication,
     getImplicationParts,
     negate,
     createImplication
 } from './utilities/formulaAST.js';
-import { 
-    normalizeFormula, 
-    extractFormulaAtoms, 
+import {
+    normalizeFormula,
+    extractFormulaAtoms,
     canonicalDoubleNeg as canonicalDoubleNegUtil,
     extractMissingFactsFromFormula
 } from './utilities/formulaUtils.js';
+import { getConfigSection } from './utilities/config.js';
 
-// Safeguard constants to guarantee termination
-const MAX_ITERATIONS = 1000;
-const MAX_QUEUE_SIZE = 1000;
-const MAX_STEPS = 100;
+// Read safeguard limits from config, falling back to defaults
+//
+function getReasoningLimits() {
+    const config = getConfigSection('reasoning') || {};
+    return {
+        maxIterations: config.maxIterations || 1000,
+        maxQueueSize: config.maxQueueSize || 1000,
+        maxSteps: config.maxSteps || 100,
+        maxProofDepth: config.maxProofDepth || 5
+    };
+}
 
 // Parse a formula string into an abstract representation
 export function parseFormula(formulaStr) {
@@ -51,7 +60,8 @@ export function astToString(astOrFormulaObj) {
 // Use imported canonical double negation utility
 const canonicalDoubleNeg = canonicalDoubleNegUtil;
 
-// Deep-clone a GentzenSystem, preserving facts and steps
+// Deep-clone a GentzenSystem, preserving facts, steps, and signature cache
+//
 const cloneSystem = (system) => {
     const newSys = new GentzenSystem();
     newSys.facts = new Set(system.facts);
@@ -61,44 +71,30 @@ const cloneSystem = (system) => {
         from: step.from,
         formulas: new Set(step.formulas)
     }));
+    newSys._knownFormulas = new Set(system._knownFormulas);
     return newSys;
 };
 
-// Generate a unique signature for a system by collecting all formulas
-const getSystemSignature = (system) => {
-    const formulas = [];
-    for (const step of system.steps) {
-        for (const f of step.formulas) {
-            formulas.push(canonicalDoubleNeg(f));
-        }
-    }
-    for (const f of system.facts) {
-        formulas.push(canonicalDoubleNeg(f));
-    }
-    const uniqueSorted = [...new Set(formulas)].sort();
-    return uniqueSorted.join(' | ');
-};
-
-// Check if a new derivation step added any genuinely new formula
-const didWeDeriveNewFormula = (originalSystem, newSystem, newStep) => {
-    if (!newStep) {
-        return false;
-    }
+// Build a set of all canonical formulas known to a system
+//
+const buildKnownFormulas = (system) => {
     const known = new Set();
-    for (const step of originalSystem.steps) {
+    for (const step of system.steps) {
         for (const f of step.formulas) {
             known.add(canonicalDoubleNeg(f));
         }
     }
-    for (const f of originalSystem.facts) {
+    for (const f of system.facts) {
         known.add(canonicalDoubleNeg(f));
     }
-    for (const f of newStep.formulas) {
-        if (!known.has(canonicalDoubleNeg(f))) {
-            return true;
-        }
-    }
-    return false;
+    return known;
+};
+
+// Generate a signature from the known formulas set (sorted, joined)
+//
+const getSystemSignature = (system) => {
+    const known = system._knownFormulas || buildKnownFormulas(system);
+    return [...known].sort().join(' | ');
 };
 
 // Extract the single formula from a step, error if not exactly one
@@ -111,6 +107,7 @@ const getUniqueFormula = (step) => {
 };
 
 // GentzenSystem encapsulates facts, steps, and rule applications
+//
 export class GentzenSystem {
     constructor(options = {}) {
         this.steps = [];
@@ -119,10 +116,12 @@ export class GentzenSystem {
         this.skippedSteps = [];
         this.proofResults = new Map();
         this.dependencyGraph = new Map();
+        this._knownFormulas = new Set();
     }
 
     addFact(formulaStr) {
         this.facts.add(formulaStr);
+        this._knownFormulas.add(canonicalDoubleNeg(formulaStr));
     }
 
     // Check if a fact is available (either in facts or proven)
@@ -171,6 +170,7 @@ export class GentzenSystem {
             formulas: new Set([formulaStr])
         };
         this.steps.push(step);
+        this._knownFormulas.add(canonicalDoubleNeg(formulaStr));
         return step;
     }
 
@@ -223,6 +223,7 @@ export class GentzenSystem {
     }
 
     // Applies the alpha rule (and or implies) to two steps
+    //
     alphaRule(step1, step2, ruleType) {
         const A = getUniqueFormula(step1);
         const B = getUniqueFormula(step2);
@@ -241,10 +242,12 @@ export class GentzenSystem {
             formulas: new Set([newFormula])
         };
         this.steps.push(newStep);
+        this._knownFormulas.add(canonicalDoubleNeg(newFormula));
         return newStep;
     }
 
     // Applies the beta rule (or) to two steps
+    //
     betaRule(step1, step2) {
         const A = getUniqueFormula(step1);
         const B = getUniqueFormula(step2);
@@ -256,25 +259,26 @@ export class GentzenSystem {
             formulas: new Set([newFormula])
         };
         this.steps.push(newStep);
+        this._knownFormulas.add(canonicalDoubleNeg(newFormula));
         return newStep;
     }
 
     // Applies contraposition to a single step
+    //
     contrapositionRule(step) {
         const f = getUniqueFormula(step);
-        
+
         const parsed = parseFormula(f);
         if (!isImplication(parsed.ast)) {
             throw new Error('Formula is not an implication - contraposition requires an implication.');
         }
-        
+
         const parts = getImplicationParts(parsed.ast);
-        // Create ~B → ~A from A → B
         const negatedConsequent = negate(parts.consequent);
         const negatedAntecedent = negate(parts.antecedent);
         const contrapositive = createImplication(negatedConsequent, negatedAntecedent);
         const newFormula = astToStringImpl(contrapositive);
-        
+
         const newStep = {
             origin: 'ContrapositionRule',
             ruleType: 'contraposition',
@@ -282,10 +286,12 @@ export class GentzenSystem {
             formulas: new Set([newFormula])
         };
         this.steps.push(newStep);
+        this._knownFormulas.add(canonicalDoubleNeg(newFormula));
         return newStep;
     }
 
     // Applies double negation (intro or elim) to a single step
+    //
     doubleNegationRule(step, mode = 'introduction') {
         const f = getUniqueFormula(step);
         let newFormula;
@@ -301,10 +307,12 @@ export class GentzenSystem {
             formulas: new Set([newFormula])
         };
         this.steps.push(newStep);
+        this._knownFormulas.add(canonicalDoubleNeg(newFormula));
         return newStep;
     }
 
     // Applies equivalence (↔) to two steps
+    //
     equivalenceRule(step1, step2) {
         const A = getUniqueFormula(step1);
         const B = getUniqueFormula(step2);
@@ -316,75 +324,132 @@ export class GentzenSystem {
             formulas: new Set([newFormula])
         };
         this.steps.push(newStep);
+        this._knownFormulas.add(canonicalDoubleNeg(newFormula));
         return newStep;
     }
 
 
-    // Expand one level of the proof search by applying all rules
+    // Expand one level of the proof search by applying all rules.
+    // Uses check-before-clone: computes what a rule would produce before
+    // allocating a clone, avoiding wasted allocations for redundant derivations.
+    //
     expandOneLevel() {
-        if (this.steps.length >= MAX_STEPS) {
+        const { maxSteps } = getReasoningLimits();
+        if (this.steps.length >= maxSteps) {
             return [];
         }
         const newSystems = [];
         const stepCount = this.steps.length;
 
+        // Precompute the set of known canonical formulas to avoid cloning
+        // when the derived formula is already known.
+        //
+        const known = this._knownFormulas;
+
+        // Two-step rules (alpha, beta, equivalence): need pairs of steps
+        //
         for (let i = 0; i < stepCount; i += 1) {
+            const stepI = this.steps[i];
+            if (stepI.formulas.size !== 1) { continue; }
+            const formulaI = [...stepI.formulas][0];
+
             for (let j = 0; j < stepCount; j += 1) {
-                const combos = [
-                    { rule: 'alpha', subtype: 'and' },
-                    { rule: 'alpha', subtype: 'implies' },
-                    { rule: 'beta' },
-                    { rule: 'equivalence' }
-                ];
-                for (const { rule, subtype } of combos) {
+                const stepJ = this.steps[j];
+                if (stepJ.formulas.size !== 1) { continue; }
+                const formulaJ = [...stepJ.formulas][0];
+
+                // Alpha AND: (A ∧ B)
+                //
+                const candidateAnd = canonicalDoubleNeg(`(${formulaI} ∧ ${formulaJ})`);
+                if (!known.has(candidateAnd)) {
                     const sysClone = cloneSystem(this);
-                    try {
-                        let newStep;
-                        if (rule === 'alpha') {
-                            newStep = sysClone.alphaRule(sysClone.steps[i], sysClone.steps[j], subtype);
-                        } else if (rule === 'beta') {
-                            newStep = sysClone.betaRule(sysClone.steps[i], sysClone.steps[j]);
-                        } else {
-                            newStep = sysClone.equivalenceRule(sysClone.steps[i], sysClone.steps[j]);
-                        }
-                        if (didWeDeriveNewFormula(this, sysClone, newStep)) {
-                            newSystems.push(sysClone);
-                        }
-                    } catch (e) {
-                        // ignore rule application errors
-                    }
+                    sysClone.alphaRule(sysClone.steps[i], sysClone.steps[j], 'and');
+                    newSystems.push(sysClone);
+                }
+
+                // Alpha IMPLIES: (A → B)
+                //
+                const candidateImplies = canonicalDoubleNeg(`(${formulaI} → ${formulaJ})`);
+                if (!known.has(candidateImplies)) {
+                    const sysClone = cloneSystem(this);
+                    sysClone.alphaRule(sysClone.steps[i], sysClone.steps[j], 'implies');
+                    newSystems.push(sysClone);
+                }
+
+                // Beta OR: (A ∨ B)
+                //
+                const candidateOr = canonicalDoubleNeg(`(${formulaI} ∨ ${formulaJ})`);
+                if (!known.has(candidateOr)) {
+                    const sysClone = cloneSystem(this);
+                    sysClone.betaRule(sysClone.steps[i], sysClone.steps[j]);
+                    newSystems.push(sysClone);
+                }
+
+                // Equivalence: (A ↔ B)
+                //
+                const candidateEquiv = canonicalDoubleNeg(`(${formulaI} ↔ ${formulaJ})`);
+                if (!known.has(candidateEquiv)) {
+                    const sysClone = cloneSystem(this);
+                    sysClone.equivalenceRule(sysClone.steps[i], sysClone.steps[j]);
+                    newSystems.push(sysClone);
                 }
             }
         }
 
+        // Single-step rules (contraposition, double negation)
+        //
         for (let i = 0; i < stepCount; i += 1) {
-            for (const { rule, mode } of [
-                { rule: 'contraposition' },
-                { rule: 'doubleNegation', mode: 'introduction' },
-                { rule: 'doubleNegation', mode: 'elimination' }
-            ]) {
-                const sysClone = cloneSystem(this);
-                try {
-                    let newStep;
-                    if (rule === 'contraposition') {
-                        newStep = sysClone.contrapositionRule(sysClone.steps[i]);
-                    } else {
-                        newStep = sysClone.doubleNegationRule(sysClone.steps[i], mode);
-                    }
-                    if (didWeDeriveNewFormula(this, sysClone, newStep)) {
+            const stepI = this.steps[i];
+            if (stepI.formulas.size !== 1) { continue; }
+            const formula = [...stepI.formulas][0];
+
+            // Contraposition: only valid on implications
+            //
+            try {
+                const parsed = parseFormula(formula);
+                if (isImplication(parsed.ast)) {
+                    const parts = getImplicationParts(parsed.ast);
+                    const contraFormula = astToStringImpl(
+                        createImplication(negate(parts.consequent), negate(parts.antecedent))
+                    );
+                    if (!known.has(canonicalDoubleNeg(contraFormula))) {
+                        const sysClone = cloneSystem(this);
+                        sysClone.contrapositionRule(sysClone.steps[i]);
                         newSystems.push(sysClone);
                     }
-                } catch (e) {
-                    // ignore rule application errors
+                }
+            } catch (e) {
+                // Not a valid implication, skip
+            }
+
+            // Double negation introduction
+            //
+            const introFormula = formula.startsWith('~~') ? formula : `~~${formula}`;
+            if (!known.has(canonicalDoubleNeg(introFormula))) {
+                const sysClone = cloneSystem(this);
+                sysClone.doubleNegationRule(sysClone.steps[i], 'introduction');
+                newSystems.push(sysClone);
+            }
+
+            // Double negation elimination
+            //
+            if (formula.startsWith('~~')) {
+                const elimFormula = formula.slice(2);
+                if (!known.has(canonicalDoubleNeg(elimFormula))) {
+                    const sysClone = cloneSystem(this);
+                    sysClone.doubleNegationRule(sysClone.steps[i], 'elimination');
+                    newSystems.push(sysClone);
                 }
             }
         }
-
 
         return newSystems;
     }
 
-    searchForProof(targetFormula, maxDepth = 5) {
+    searchForProof(targetFormula, maxDepth) {
+        const limits = getReasoningLimits();
+        const depth = maxDepth !== undefined ? maxDepth : limits.maxProofDepth;
+
         const result = {
             proven: false,
             path: [],
@@ -413,30 +478,30 @@ export class GentzenSystem {
 
         while (queue.length) {
             iterations += 1;
-            if (iterations > MAX_ITERATIONS || queue.length > MAX_QUEUE_SIZE) {
+            if (iterations > limits.maxIterations || queue.length > limits.maxQueueSize) {
                 return result;
             }
-            const { system, depth, path } = queue.shift();
+            const { system, depth: currentDepth, path } = queue.shift();
             if (system.isProved(targetFormula)) {
                 result.proven = true;
                 result.path = path;
-                result.depth = depth;
+                result.depth = currentDepth;
                 return result;
             }
-            if (depth >= maxDepth) {
+            if (currentDepth >= depth) {
                 continue;
             }
             for (const child of system.expandOneLevel()) {
                 if (child.isProved(targetFormula)) {
                     result.proven = true;
                     result.path = [...path, 'final_step'];
-                    result.depth = depth + 1;
+                    result.depth = currentDepth + 1;
                     return result;
                 }
                 const sig = getSystemSignature(child);
                 if (!visited.has(sig)) {
                     visited.add(sig);
-                    queue.push({ system: child, depth: depth + 1, path: [...path, `step_${depth + 1}`] });
+                    queue.push({ system: child, depth: currentDepth + 1, path: [...path, `step_${currentDepth + 1}`] });
                 }
             }
         }
