@@ -382,6 +382,74 @@ test('rule application fails with multi-formula step', t => {
     }, { message: /exactly one formula/ });
 });
 
+// searchForProof - BFS exploration
+//
+
+test('searchForProof - discovers conjunction via expandOneLevel', t => {
+    const system = new GentzenSystem();
+    system.addProposition('A');
+    system.addProposition('B');
+
+    const result = system.searchForProof('(A ∧ B)');
+
+    t.true(result.proven);
+    t.true(result.depth > 0);
+});
+
+test('searchForProof - negative proof for implication between unrelated facts', t => {
+    const system = new GentzenSystem();
+    system.addProposition('Rain');
+    system.addProposition('SkyIsBlue');
+
+    // Implication intro removed from proof search — should NOT prove
+    //
+    const result = system.searchForProof('(Rain → SkyIsBlue)');
+
+    t.false(result.proven);
+});
+
+test('searchForProof - maxDepth 0 prevents expansion', t => {
+    const system = new GentzenSystem();
+    system.addProposition('A');
+    system.addProposition('B');
+
+    const result = system.searchForProof('(A ∧ B)', 0);
+
+    t.false(result.proven);
+});
+
+test('searchForProof - maxDepth 1 allows one level of expansion', t => {
+    const system = new GentzenSystem();
+    system.addProposition('A');
+    system.addProposition('B');
+
+    const result = system.searchForProof('(A ∧ B)', 1);
+
+    t.true(result.proven);
+});
+
+// Input validation
+//
+
+test('parseFormula - throws on null input', t => {
+    t.throws(() => {
+        parseFormula(null);
+    }, { message: /non-empty string/ });
+});
+
+test('parseFormula - throws on empty string', t => {
+    t.throws(() => {
+        parseFormula('');
+    }, { message: /non-empty string/ });
+});
+
+test('addFact - throws on undefined input', t => {
+    const system = new GentzenSystem();
+    t.throws(() => {
+        system.addFact(undefined);
+    }, { message: /non-empty string/ });
+});
+
 // getAtomicPropositions
 //
 

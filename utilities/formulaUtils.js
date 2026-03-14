@@ -1,5 +1,5 @@
-import { parseFormula } from '../gentzen.js';
-import { getAtoms } from './formulaAST.js';
+import { parseFormulaFromString } from './formulaParser.js';
+import { normalizeAST, astToString as astToStringImpl, getAtoms } from './formulaAST.js';
 import { getConfigSection } from './config.js';
 
 // LRU-style cache for parsed formula results.
@@ -20,8 +20,9 @@ export function normalizeFormula(formula) {
     if (cached !== undefined) {
         return cached;
     }
-    const parsed = parseFormula(formula);
-    const result = parsed.toString();
+    const ast = parseFormulaFromString(formula);
+    const normalized = normalizeAST(ast);
+    const result = astToStringImpl(normalized);
 
     // Evict oldest entry if at capacity
     //
@@ -36,16 +37,22 @@ export function normalizeFormula(formula) {
 // Extract atoms from a formula using AST parsing
 //
 export function extractFormulaAtoms(formula) {
-    const parsed = parseFormula(formula);
-    return Array.from(getAtoms(parsed.ast));
+    const ast = normalizeAST(parseFormulaFromString(formula));
+    return Array.from(getAtoms(ast));
 }
 
 // Extract atoms from a formula and add them to a set (for collecting atoms)
 //
 export function addFormulaAtomsToSet(formula, atomSet) {
-    const parsed = parseFormula(formula);
-    const atoms = getAtoms(parsed.ast);
+    const ast = normalizeAST(parseFormulaFromString(formula));
+    const atoms = getAtoms(ast);
     atoms.forEach(atom => atomSet.add(atom));
+}
+
+// Clear the normalization cache (for test isolation and long-lived processes)
+//
+export function clearNormalizeCache() {
+    _normalizeCache.clear();
 }
 
 // Strip all leading "~~" to get the canonical form of a formula
@@ -61,8 +68,8 @@ export function canonicalDoubleNeg(formula) {
 // Extract atoms with base names for missing fact reporting
 //
 export function extractMissingFactsFromFormula(formula, isAtomResolvableCallback) {
-    const parsed = parseFormula(formula);
-    const atoms = getAtoms(parsed.ast);
+    const ast = normalizeAST(parseFormulaFromString(formula));
+    const atoms = getAtoms(ast);
     const missing = [];
     for (const atom of atoms) {
         if (!isAtomResolvableCallback(atom)) {

@@ -1,7 +1,7 @@
 // Centralized configuration system with environment support and validation.
 //
 
-import { LogLevel } from './logger.js';
+import { LogLevel, createLogger } from './logger.js';
 
 // Default configuration values
 const DEFAULT_CONFIG = {
@@ -292,7 +292,7 @@ class ConfigManager {
             try {
                 listener(this._config);
             } catch (error) {
-                console.warn('Configuration listener error:', error);
+                createLogger().warn('Configuration listener error:', error);
             }
         }
     }

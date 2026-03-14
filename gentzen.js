@@ -33,6 +33,9 @@ function getReasoningLimits() {
 
 // Parse a formula string into an abstract representation
 export function parseFormula(formulaStr) {
+    if (typeof formulaStr !== 'string' || formulaStr.trim().length === 0) {
+        throw new Error('parseFormula requires a non-empty string argument');
+    }
     // Parse the formula string into AST
     const ast = parseFormulaFromString(formulaStr);
     
@@ -111,12 +114,13 @@ export class GentzenSystem {
         this.facts = new Set();
         this.missingFacts = new Set();
         this.skippedSteps = [];
-        this.proofResults = new Map();
-        this.dependencyGraph = new Map();
         this._knownFormulas = new Set();
     }
 
     addFact(formulaStr) {
+        if (typeof formulaStr !== 'string' || formulaStr.trim().length === 0) {
+            throw new Error('addFact requires a non-empty string argument');
+        }
         this.facts.add(formulaStr);
         this._knownFormulas.add(normalizeFormula(formulaStr));
     }

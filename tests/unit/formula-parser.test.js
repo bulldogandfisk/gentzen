@@ -272,6 +272,51 @@ test('ParseError has position and name properties', t => {
     t.is(error.name, 'ParseError');
 });
 
+// Word-boundary tests for lexer operator keywords
+//
+
+test('tokenizer treats NOThing as identifier, not NOT operator', t => {
+    const tokens = tokenize('NOThing');
+    const nonEof = tokens.filter(tok => tok.type !== 'EOF');
+    t.is(nonEof.length, 1);
+    t.is(nonEof[0].type, 'IDENTIFIER');
+    t.is(nonEof[0].value, 'NOThing');
+});
+
+test('tokenizer treats ORacle as identifier, not OR operator', t => {
+    const tokens = tokenize('ORacle');
+    const nonEof = tokens.filter(tok => tok.type !== 'EOF');
+    t.is(nonEof.length, 1);
+    t.is(nonEof[0].type, 'IDENTIFIER');
+    t.is(nonEof[0].value, 'ORacle');
+});
+
+test('tokenizer treats ANDroid as identifier, not AND operator', t => {
+    const tokens = tokenize('ANDroid');
+    const nonEof = tokens.filter(tok => tok.type !== 'EOF');
+    t.is(nonEof.length, 1);
+    t.is(nonEof[0].type, 'IDENTIFIER');
+    t.is(nonEof[0].value, 'ANDroid');
+});
+
+test('tokenizer treats IFFy as identifier, not IFF operator', t => {
+    const tokens = tokenize('IFFy');
+    const nonEof = tokens.filter(tok => tok.type !== 'EOF');
+    t.is(nonEof.length, 1);
+    t.is(nonEof[0].type, 'IDENTIFIER');
+    t.is(nonEof[0].value, 'IFFy');
+});
+
+test('tokenizer still recognizes NOT as operator when standalone', t => {
+    const tokens = tokenize('NOT A');
+    const nonEof = tokens.filter(tok => tok.type !== 'EOF');
+    t.is(nonEof.length, 2);
+    t.is(nonEof[0].type, 'OPERATOR');
+    t.is(nonEof[0].value, 'not');
+    t.is(nonEof[1].type, 'IDENTIFIER');
+    t.is(nonEof[1].value, 'A');
+});
+
 // Integration tests with existing scenarios
 test('parser handles formulas from existing scenarios', t => {
     const formulas = [

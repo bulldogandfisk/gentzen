@@ -12,6 +12,9 @@ import chalk from 'chalk';
 async function extractReferencedAtomsFromScenario(scenarioPath) {
     const fileContent = await fs.readFile(scenarioPath, 'utf8');
     const scenario = YAML.parse(fileContent);
+    if (!scenario || typeof scenario !== 'object') {
+        throw new Error(`Scenario file "${scenarioPath}" is empty or does not contain a valid YAML object`);
+    }
     return collectReferencedAtoms(scenario);
 }
 
@@ -43,16 +46,23 @@ async function handleScenarioValidation(scenarioPath, options = {}) {
 }
 
 // Extracted resolver discovery logic to handle resolver loading and merging
-async function handleResolverDiscovery(resolversPath, customResolvers = {}, requiredAtoms = null) {
+async function handleResolverDiscovery(resolversPath, customResolvers = {}, requiredAtoms = null, logger = null) {
     let discoveredResolvers = {};
     let loadedFiles = [];
     let totalResolvers = 0;
-    
+    let resolverErrors = [];
+
     if (resolversPath) {
         const discovery = await discoverResolvers(resolversPath);
         discoveredResolvers = discovery.resolvers;
         loadedFiles = discovery.loadedFiles;
         totalResolvers = discovery.totalResolvers;
+        resolverErrors = discovery.errors || [];
+        if (logger && resolverErrors.length > 0) {
+            for (const err of resolverErrors) {
+                logger.warn(`Resolver file "${err.file}" failed to load: ${err.error}`);
+            }
+        }
     }
     
     // Merge discovered resolvers with any custom resolvers provided
@@ -72,12 +82,13 @@ async function handleResolverDiscovery(resolversPath, customResolvers = {}, requ
         allResolvers,
         factMap,
         loadedFiles,
-        totalResolvers
+        totalResolvers,
+        resolverErrors
     };
 }
 
 // Extracted result building logic to create initial results structure
-function buildInitialResults(scenarioPath, system, targets, factMap, loadedFiles, totalResolvers, verboseInfo, propositions = []) {
+function buildInitialResults(scenarioPath, system, targets, factMap, loadedFiles, totalResolvers, verboseInfo, propositions = [], resolverErrors = []) {
     return {
         scenarioPath,
         propositions,
@@ -95,6 +106,7 @@ function buildInitialResults(scenarioPath, system, targets, factMap, loadedFiles
         missingFacts: Array.from(system.missingFacts),
         skippedSteps: system.skippedSteps,
         factResolutions: factMap,
+        resolverErrors,
         verboseInfo,
         system
     };
@@ -153,8 +165,8 @@ export async function runGentzenReasoning(scenarioPath, options = {}) {
         
         // Discover and merge resolvers.
         //
-        const { allResolvers, factMap, loadedFiles, totalResolvers } = await handleResolverDiscovery(resolversPath, customResolvers, requiredAtoms);
-        
+        const { allResolvers, factMap, loadedFiles, totalResolvers, resolverErrors } = await handleResolverDiscovery(resolversPath, customResolvers, requiredAtoms, logger);
+
         // Store verbose info in results for display function.
         //
         const verboseInfo = verbose ? {
@@ -162,9 +174,9 @@ export async function runGentzenReasoning(scenarioPath, options = {}) {
             factResolutionDetails: factMap,
             resolversPath
         } : null;
-        
+
         const { system, targets, propositions } = await loadGentzenScenario(scenarioPath, factMap);
-        const results = buildInitialResults(scenarioPath, system, targets, factMap, loadedFiles, totalResolvers, verboseInfo, propositions);
+        const results = buildInitialResults(scenarioPath, system, targets, factMap, loadedFiles, totalResolvers, verboseInfo, propositions, resolverErrors);
         
         // Evaluate all targets and update results.
         //
@@ -180,38 +192,49 @@ export async function runGentzenReasoning(scenarioPath, options = {}) {
 
 export function displayResults(results, options = {}) {
     const { verbose = false } = options;
+    const logConfig = getConfigSection('logging');
+    const logger = options.logger || createLogger(logConfig);
     const { system, verboseInfo, scenarioPath, propositions } = results;
 
     const scenarioName = scenarioPath.split('/').pop();
-    console.log(`${EOL}${chalk.bold(`📁 Scenario: ${scenarioName}`)}`);
+    logger.info(`${EOL}${chalk.bold(`📁 Scenario: ${scenarioName}`)}`);
 
     // Display propositions if they exist
     if (propositions && propositions.length > 0) {
-        console.log(`${EOL}${chalk.bold('📋 Propositions:')}`);
+        logger.info(`${EOL}${chalk.bold('📋 Propositions:')}`);
         for (const proposition of propositions) {
-            console.log(`  ${chalk.blue('•')} ${proposition}`);
+            logger.info(`  ${chalk.blue('•')} ${proposition}`);
         }
     }
 
     if (verbose && verboseInfo) {
         const resolverFiles = verboseInfo.loadedFiles.join(`, `);
-        console.log(`${EOL}🔧 Loaded resolver files:`, resolverFiles);
-        console.log(`${EOL}🔍 Fact Resolvers:`);
+        logger.info(`${EOL}🔧 Loaded resolver files: ${resolverFiles}`);
+        logger.info(`${EOL}🔍 Fact Resolvers:`);
         for (const [fact, resolved] of Object.entries(verboseInfo.factResolutionDetails)) {
             const status = resolved ? '✅' : '❌';
-            console.log(`  ${status} ${fact}`);
+            logger.info(`  ${status} ${fact}`);
         }
     }
 
-    console.log(`${EOL}${chalk.bold('Available Facts:')}`);
+    logger.info(`${EOL}${chalk.bold('Available Facts:')}`);
     for (const fact of results.availableFacts) {
-        console.log(`  ${chalk.green('✓')} ${fact}`);
+        logger.info(`  ${chalk.green('✓')} ${fact}`);
     }
 
     if (results.missingFacts.length > 0) {
-        console.log(`${EOL}${chalk.bold('Missing Facts:')}`);
+        logger.info(`${EOL}${chalk.bold('Missing Facts:')}`);
         for (const fact of results.missingFacts) {
-            console.log(`  ${chalk.red('✗')} ${fact}`);
+            logger.info(`  ${chalk.red('✗')} ${fact}`);
+        }
+    }
+
+    // Display resolver errors if any
+    //
+    if (results.resolverErrors && results.resolverErrors.length > 0) {
+        logger.warn(`${EOL}${chalk.bold('⚠️  Resolver Errors:')}`);
+        for (const err of results.resolverErrors) {
+            logger.warn(`  ${chalk.red('✗')} ${err.file}: ${err.error}`);
         }
     }
 
@@ -219,50 +242,50 @@ export function displayResults(results, options = {}) {
     //
     const provenTargets = results.targets.filter(t => t.proven);
     const failedTargets = results.targets.filter(t => !t.proven);
-    console.log(`${EOL}${chalk.bold(`Target Results: ${provenTargets.length} proven, ${failedTargets.length} failed`)}`);
+    logger.info(`${EOL}${chalk.bold(`Target Results: ${provenTargets.length} proven, ${failedTargets.length} failed`)}`);
     for (const target of results.targets) {
         if (target.proven) {
-            console.log(`  ${chalk.green('✅ PROVEN:')} ${target.formula}`);
+            logger.info(`  ${chalk.green('✅ PROVEN:')} ${target.formula}`);
             if (target.path.length > 0) {
-                console.log(`     ${chalk.gray('Path:')} ${target.path.join(' → ')}`);
+                logger.info(`     ${chalk.gray('Path:')} ${target.path.join(' → ')}`);
             }
         } else {
-            console.log(`  ${chalk.red('❌ FAILED:')} ${target.formula}`);
+            logger.info(`  ${chalk.red('❌ FAILED:')} ${target.formula}`);
             if (target.missingFacts.length > 0) {
-                console.log(`     ${chalk.yellow('Missing:')} ${target.missingFacts.join(', ')}`);
+                logger.info(`     ${chalk.yellow('Missing:')} ${target.missingFacts.join(', ')}`);
             }
         }
     }
 
     // Show detailed steps if verbose
     if (verbose && system) {
-        console.log(`${EOL}${chalk.bold('=== PROOF STEPS ===')}`);
+        logger.info(`${EOL}${chalk.bold('=== PROOF STEPS ===')}`);
         for (let i = 0; i < system.steps.length; i += 1) {
             const step = system.steps[i];
             const formula = [...step.formulas][0];
             const fromIndices = step.from
                 .map(s => system.steps.indexOf(s) + 1)
                 .join(', ') || '-';
-            console.log(`${chalk.blue(`Step #${i + 1}:`)} ${step.origin} [${step.ruleType}]`);
-            console.log(`  from: ${fromIndices}`);
-            console.log(`  formula: ${chalk.green(formula)}`);
-            console.log('---');
+            logger.info(`${chalk.blue(`Step #${i + 1}:`)} ${step.origin} [${step.ruleType}]`);
+            logger.info(`  from: ${fromIndices}`);
+            logger.info(`  formula: ${chalk.green(formula)}`);
+            logger.info('---');
         }
         if (verboseInfo?.resolversPath) {
-            console.log(`${EOL}🔧 Loaded from: ${verboseInfo.resolversPath}`);
+            logger.info(`${EOL}🔧 Loaded from: ${verboseInfo.resolversPath}`);
         }
     }
 
     if (results.skippedSteps.length > 0) {
-        console.log(`${EOL}${chalk.bold('⏸️ Skipped Steps:')}`);
+        logger.info(`${EOL}${chalk.bold('⏸️ Skipped Steps:')}`);
         results.skippedSteps.forEach((step, i) => {
-            console.log(`${i + 1}. Step ${step.stepIndex} (${step.rule}): Missing ${step.missingFacts.join(', ')}`);
+            logger.info(`${i + 1}. Step ${step.stepIndex} (${step.rule}): Missing ${step.missingFacts.join(', ')}`);
         });
     }
 
-    console.log(`${EOL}${chalk.bold('🔍 Fact Resolutions:')}`);
+    logger.info(`${EOL}${chalk.bold('🔍 Fact Resolutions:')}`);
     Object.entries(results.factResolutions).forEach(([fact, resolved]) => {
         const status = resolved ? '✅' : '❌';
-        console.log(`  ${status} ${fact}`);
+        logger.info(`  ${status} ${fact}`);
     });
 }

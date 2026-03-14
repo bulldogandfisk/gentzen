@@ -50,6 +50,9 @@ export async function loadGentzenScenario(yamlPath, factMap = {}, options = {}) 
 
     const fileContent = await readFile(yamlPath, 'utf8');
     const scenario = YAML.parse(fileContent);
+    if (!scenario || typeof scenario !== 'object') {
+        throw new Error(`Scenario file "${yamlPath}" is empty or does not contain a valid YAML object`);
+    }
 
     const referencedAtoms = collectReferencedAtoms(scenario);
     const system = new GentzenSystem(options);
