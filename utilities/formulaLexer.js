@@ -112,6 +112,14 @@ export class FormulaLexer {
 
         for (const op of SORTED_OPERATOR_KEYS) {
             if (remaining.startsWith(op)) {
+                // For alphabetic operators, require a word boundary
+                //
+                if (/[A-Za-z]/.test(op[0])) {
+                    const nextChar = remaining[op.length];
+                    if (nextChar && /[A-Za-z0-9_]/.test(nextChar)) {
+                        continue;
+                    }
+                }
                 result = op;
                 // Advance position by operator length
                 for (let i = 0; i < op.length; i++) {
@@ -131,11 +139,25 @@ export class FormulaLexer {
     }
     
     // Check if current position starts an operator
+    // For alphabetic keywords (NOT, AND, etc.), require a word boundary
+    // so that identifiers like NOThing or ORacle are not misparsed.
+    //
     startsOperator() {
         if (!this.current_char) return false;
-        
+
         const remaining = this.input.slice(this.position);
-        return SORTED_OPERATOR_KEYS.some(op => remaining.startsWith(op));
+        return SORTED_OPERATOR_KEYS.some(op => {
+            if (!remaining.startsWith(op)) {
+                return false;
+            }
+            if (/[A-Za-z]/.test(op[0])) {
+                const nextChar = remaining[op.length];
+                if (nextChar && /[A-Za-z0-9_]/.test(nextChar)) {
+                    return false;
+                }
+            }
+            return true;
+        });
     }
     
     // Get the next token

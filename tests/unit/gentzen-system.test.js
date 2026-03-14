@@ -283,8 +283,9 @@ test('doubleNegationRule - introduction on already ~~ formula', t => {
     const result = system.doubleNegationRule(step, 'introduction');
     const formula = [...result.formulas][0];
 
-    // Already starts with ~~, so stays as ~~A
-    t.is(formula, '~~A');
+    // AST-based: wraps in two more NOT layers → ~~~~A
+    //
+    t.is(formula, '~~~~A');
 });
 
 test('doubleNegationRule - elimination on ~~ formula', t => {

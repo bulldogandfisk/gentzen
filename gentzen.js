@@ -7,6 +7,7 @@ import {
     normalizeAST,
     getAtoms,
     isImplication,
+    isNegation,
     getImplicationParts,
     negate,
     createImplication
@@ -14,7 +15,6 @@ import {
 import {
     normalizeFormula,
     extractFormulaAtoms,
-    canonicalDoubleNeg as canonicalDoubleNegUtil,
     extractMissingFactsFromFormula
 } from './utilities/formulaUtils.js';
 import { getConfigSection } from './utilities/config.js';
@@ -57,9 +57,6 @@ export function astToString(astOrFormulaObj) {
     throw new Error('Invalid formula object - must have ast or toString method');
 }
 
-// Use imported canonical double negation utility
-const canonicalDoubleNeg = canonicalDoubleNegUtil;
-
 // Deep-clone a GentzenSystem, preserving facts, steps, and signature cache
 //
 const cloneSystem = (system) => {
@@ -81,11 +78,11 @@ const buildKnownFormulas = (system) => {
     const known = new Set();
     for (const step of system.steps) {
         for (const f of step.formulas) {
-            known.add(canonicalDoubleNeg(f));
+            known.add(normalizeFormula(f));
         }
     }
     for (const f of system.facts) {
-        known.add(canonicalDoubleNeg(f));
+        known.add(normalizeFormula(f));
     }
     return known;
 };
@@ -121,7 +118,7 @@ export class GentzenSystem {
 
     addFact(formulaStr) {
         this.facts.add(formulaStr);
-        this._knownFormulas.add(canonicalDoubleNeg(formulaStr));
+        this._knownFormulas.add(normalizeFormula(formulaStr));
     }
 
     // Check if a fact is available (either in facts or proven)
@@ -170,7 +167,7 @@ export class GentzenSystem {
             formulas: new Set([formulaStr])
         };
         this.steps.push(step);
-        this._knownFormulas.add(canonicalDoubleNeg(formulaStr));
+        this._knownFormulas.add(normalizeFormula(formulaStr));
         return step;
     }
 
@@ -242,7 +239,7 @@ export class GentzenSystem {
             formulas: new Set([newFormula])
         };
         this.steps.push(newStep);
-        this._knownFormulas.add(canonicalDoubleNeg(newFormula));
+        this._knownFormulas.add(normalizeFormula(newFormula));
         return newStep;
     }
 
@@ -259,7 +256,7 @@ export class GentzenSystem {
             formulas: new Set([newFormula])
         };
         this.steps.push(newStep);
-        this._knownFormulas.add(canonicalDoubleNeg(newFormula));
+        this._knownFormulas.add(normalizeFormula(newFormula));
         return newStep;
     }
 
@@ -286,19 +283,26 @@ export class GentzenSystem {
             formulas: new Set([newFormula])
         };
         this.steps.push(newStep);
-        this._knownFormulas.add(canonicalDoubleNeg(newFormula));
+        this._knownFormulas.add(normalizeFormula(newFormula));
         return newStep;
     }
 
-    // Applies double negation (intro or elim) to a single step
+    // Applies double negation (intro or elim) to a single step.
+    // Uses AST-based manipulation to correctly handle compound
+    // and negated formulas (e.g. ~A → ~~(~A), not ~~~A).
     //
     doubleNegationRule(step, mode = 'introduction') {
         const f = getUniqueFormula(step);
+        const parsed = parseFormulaFromString(f);
         let newFormula;
         if (mode === 'introduction') {
-            newFormula = f.startsWith('~~') ? f : `~~${f}`;
+            newFormula = astToStringImpl(negate(negate(parsed)));
         } else {
-            newFormula = f.startsWith('~~') ? f.slice(2) : f;
+            if (isNegation(parsed) && isNegation(parsed.operand)) {
+                newFormula = astToStringImpl(normalizeAST(parsed.operand.operand));
+            } else {
+                newFormula = f;
+            }
         }
         const newStep = {
             origin: 'DoubleNegationRule',
@@ -307,7 +311,7 @@ export class GentzenSystem {
             formulas: new Set([newFormula])
         };
         this.steps.push(newStep);
-        this._knownFormulas.add(canonicalDoubleNeg(newFormula));
+        this._knownFormulas.add(normalizeFormula(newFormula));
         return newStep;
     }
 
@@ -324,7 +328,7 @@ export class GentzenSystem {
             formulas: new Set([newFormula])
         };
         this.steps.push(newStep);
-        this._knownFormulas.add(canonicalDoubleNeg(newFormula));
+        this._knownFormulas.add(normalizeFormula(newFormula));
         return newStep;
     }
 
@@ -346,7 +350,7 @@ export class GentzenSystem {
         //
         const known = this._knownFormulas;
 
-        // Two-step rules (alpha, beta, equivalence): need pairs of steps
+        // Two-step rules (alpha AND, beta OR): need pairs of steps
         //
         for (let i = 0; i < stepCount; i += 1) {
             const stepI = this.steps[i];
@@ -360,39 +364,22 @@ export class GentzenSystem {
 
                 // Alpha AND: (A ∧ B)
                 //
-                const candidateAnd = canonicalDoubleNeg(`(${formulaI} ∧ ${formulaJ})`);
+                const candidateAnd = normalizeFormula(`(${formulaI} ∧ ${formulaJ})`);
                 if (!known.has(candidateAnd)) {
                     const sysClone = cloneSystem(this);
                     sysClone.alphaRule(sysClone.steps[i], sysClone.steps[j], 'and');
                     newSystems.push(sysClone);
                 }
 
-                // Alpha IMPLIES: (A → B)
-                //
-                const candidateImplies = canonicalDoubleNeg(`(${formulaI} → ${formulaJ})`);
-                if (!known.has(candidateImplies)) {
-                    const sysClone = cloneSystem(this);
-                    sysClone.alphaRule(sysClone.steps[i], sysClone.steps[j], 'implies');
-                    newSystems.push(sysClone);
-                }
-
                 // Beta OR: (A ∨ B)
                 //
-                const candidateOr = canonicalDoubleNeg(`(${formulaI} ∨ ${formulaJ})`);
+                const candidateOr = normalizeFormula(`(${formulaI} ∨ ${formulaJ})`);
                 if (!known.has(candidateOr)) {
                     const sysClone = cloneSystem(this);
                     sysClone.betaRule(sysClone.steps[i], sysClone.steps[j]);
                     newSystems.push(sysClone);
                 }
 
-                // Equivalence: (A ↔ B)
-                //
-                const candidateEquiv = canonicalDoubleNeg(`(${formulaI} ↔ ${formulaJ})`);
-                if (!known.has(candidateEquiv)) {
-                    const sysClone = cloneSystem(this);
-                    sysClone.equivalenceRule(sysClone.steps[i], sysClone.steps[j]);
-                    newSystems.push(sysClone);
-                }
             }
         }
 
@@ -412,7 +399,7 @@ export class GentzenSystem {
                     const contraFormula = astToStringImpl(
                         createImplication(negate(parts.consequent), negate(parts.antecedent))
                     );
-                    if (!known.has(canonicalDoubleNeg(contraFormula))) {
+                    if (!known.has(normalizeFormula(contraFormula))) {
                         const sysClone = cloneSystem(this);
                         sysClone.contrapositionRule(sysClone.steps[i]);
                         newSystems.push(sysClone);
@@ -424,22 +411,32 @@ export class GentzenSystem {
 
             // Double negation introduction
             //
-            const introFormula = formula.startsWith('~~') ? formula : `~~${formula}`;
-            if (!known.has(canonicalDoubleNeg(introFormula))) {
-                const sysClone = cloneSystem(this);
-                sysClone.doubleNegationRule(sysClone.steps[i], 'introduction');
-                newSystems.push(sysClone);
+            try {
+                const parsedForIntro = parseFormulaFromString(formula);
+                const introCandidate = astToStringImpl(negate(negate(parsedForIntro)));
+                if (!known.has(normalizeFormula(introCandidate))) {
+                    const sysClone = cloneSystem(this);
+                    sysClone.doubleNegationRule(sysClone.steps[i], 'introduction');
+                    newSystems.push(sysClone);
+                }
+            } catch (e) {
+                // Parse error, skip
             }
 
             // Double negation elimination
             //
-            if (formula.startsWith('~~')) {
-                const elimFormula = formula.slice(2);
-                if (!known.has(canonicalDoubleNeg(elimFormula))) {
-                    const sysClone = cloneSystem(this);
-                    sysClone.doubleNegationRule(sysClone.steps[i], 'elimination');
-                    newSystems.push(sysClone);
+            try {
+                const parsedForElim = parseFormulaFromString(formula);
+                if (isNegation(parsedForElim) && isNegation(parsedForElim.operand)) {
+                    const elimCandidate = astToStringImpl(normalizeAST(parsedForElim.operand.operand));
+                    if (!known.has(normalizeFormula(elimCandidate))) {
+                        const sysClone = cloneSystem(this);
+                        sysClone.doubleNegationRule(sysClone.steps[i], 'elimination');
+                        newSystems.push(sysClone);
+                    }
                 }
+            } catch (e) {
+                // Parse error, skip
             }
         }
 
