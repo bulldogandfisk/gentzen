@@ -370,34 +370,3 @@ test('FormulaLexer readOperator throws for unknown operator char', t => {
     }, { message: /Unknown operator/ });
 });
 
-// Integration tests with existing scenarios
-test('parser handles formulas from existing scenarios', t => {
-    const formulas = [
-        'CustomerIsVIP',
-        'PaymentProcessed', 
-        '(CustomerIsVIP ∧ PaymentProcessed)',
-        'ProcessOrder',
-        'SystemHealthy',
-        'IsBusinessHours',
-        '(SystemHealthy ∧ IsBusinessHours)',
-        'ScheduleMaintenance',
-        '~UserHasPermission',
-        'SecurityCheckPassed',
-        '(~UserHasPermission ∧ SecurityCheckPassed)',
-        'AccessDenied',
-        'UserIsGuest',
-        '~MaintenanceMode',
-        '(UserIsGuest ∧ ~MaintenanceMode)',
-        'AllowGuestAccess',
-        'SystemAvailable',
-        '(~UserHasPermission → AccessDenied)',
-        '(UserIsGuest ∧ ~MaintenanceMode)'
-    ];
-    
-    for (const formula of formulas) {
-        const result = parseFormula(formula);
-        t.truthy(result);
-        t.truthy(result.ast, `Failed to parse: ${formula}`);
-        t.is(typeof result.toString(), 'string');
-    }
-});

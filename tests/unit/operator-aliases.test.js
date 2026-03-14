@@ -1,20 +1,22 @@
 import test from 'ava';
 import { runGentzenReasoning } from '../../main.js';
 import { join } from 'node:path';
-import fs from 'fs';
-import os from 'os';
+import fs from 'fs-extra';
+import os from 'node:os';
 
 // Helper to create temporary scenario files for testing
-function createTempScenario(scenarioContent) {
-    const tempDir = fs.mkdtempSync(join(os.tmpdir(), 'gentzen-operator-test-'));
+//
+async function createTempScenario(scenarioContent) {
+    const tempDir = await fs.mkdtemp(join(os.tmpdir(), 'gentzen-operator-test-'));
     const scenarioPath = join(tempDir, 'test-scenario.yaml');
-    fs.writeFileSync(scenarioPath, scenarioContent);
+    await fs.writeFile(scenarioPath, scenarioContent);
     return { scenarioPath, tempDir };
 }
 
 // Helper to clean up temp files
-function cleanup(tempDir) {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+//
+async function cleanup(tempDir) {
+    await fs.remove(tempDir);
 }
 
 // Test resolvers for operator alias tests
@@ -56,7 +58,7 @@ targets:
   - Result
 `;
 
-        const { scenarioPath, tempDir } = createTempScenario(scenarioContent);
+        const { scenarioPath, tempDir } = await createTempScenario(scenarioContent);
         
         try {
             const results = await runGentzenReasoning(scenarioPath, {
@@ -69,7 +71,7 @@ targets:
         } catch (error) {
             t.fail(`${alias.name} failed: ${error.message}`);
         } finally {
-            cleanup(tempDir);
+            await cleanup(tempDir);
         }
     }
 });
@@ -96,7 +98,7 @@ targets:
   - (UserLoggedIn ${alias.operator} SystemHealthy)
 `;
 
-        const { scenarioPath, tempDir } = createTempScenario(scenarioContent);
+        const { scenarioPath, tempDir } = await createTempScenario(scenarioContent);
         
         try {
             const results = await runGentzenReasoning(scenarioPath, {
@@ -108,7 +110,7 @@ targets:
         } catch (error) {
             t.fail(`${alias.name} failed: ${error.message}`);
         } finally {
-            cleanup(tempDir);
+            await cleanup(tempDir);
         }
     }
 });
@@ -136,7 +138,7 @@ targets:
   - (UserLoggedIn ${alias.operator} Result)
 `;
 
-        const { scenarioPath, tempDir } = createTempScenario(scenarioContent);
+        const { scenarioPath, tempDir } = await createTempScenario(scenarioContent);
         
         try {
             const results = await runGentzenReasoning(scenarioPath, {
@@ -148,7 +150,7 @@ targets:
         } catch (error) {
             t.fail(`${alias.name} failed: ${error.message}`);
         } finally {
-            cleanup(tempDir);
+            await cleanup(tempDir);
         }
     }
 });
@@ -175,7 +177,7 @@ targets:
   - (UserLoggedIn ${alias.operator} SystemHealthy)
 `;
 
-        const { scenarioPath, tempDir } = createTempScenario(scenarioContent);
+        const { scenarioPath, tempDir } = await createTempScenario(scenarioContent);
         
         try {
             const results = await runGentzenReasoning(scenarioPath, {
@@ -187,7 +189,7 @@ targets:
         } catch (error) {
             t.fail(`${alias.name} failed: ${error.message}`);
         } finally {
-            cleanup(tempDir);
+            await cleanup(tempDir);
         }
     }
 });
@@ -231,7 +233,7 @@ targets:
   - AgentCanRun
 `;
 
-    const { scenarioPath, tempDir } = createTempScenario(scenarioContent);
+    const { scenarioPath, tempDir } = await createTempScenario(scenarioContent);
     
     try {
         const results = await runGentzenReasoning(scenarioPath, {
@@ -245,7 +247,7 @@ targets:
     } catch (error) {
         t.fail(`Mixed aliases failed: ${error.message}`);
     } finally {
-        cleanup(tempDir);
+        await cleanup(tempDir);
     }
 });
 
@@ -272,7 +274,7 @@ targets:
   - (~ActionAllowed IMPLIES ~UserLoggedIn)
 `;
 
-    const { scenarioPath, tempDir } = createTempScenario(scenarioContent);
+    const { scenarioPath, tempDir } = await createTempScenario(scenarioContent);
     
     try {
         const results = await runGentzenReasoning(scenarioPath, {
@@ -285,7 +287,7 @@ targets:
     } catch (error) {
         t.fail(`Contraposition with aliases failed: ${error.message}`);
     } finally {
-        cleanup(tempDir);
+        await cleanup(tempDir);
     }
 });
 
@@ -332,7 +334,7 @@ targets:
   - AgentAuthorized
 `;
 
-    const { scenarioPath, tempDir } = createTempScenario(scenarioContent);
+    const { scenarioPath, tempDir } = await createTempScenario(scenarioContent);
     
     try {
         const results = await runGentzenReasoning(scenarioPath, {
@@ -349,7 +351,7 @@ targets:
     } catch (error) {
         t.fail(`Agent authorization scenario failed: ${error.message}`);
     } finally {
-        cleanup(tempDir);
+        await cleanup(tempDir);
     }
 });
 
@@ -373,7 +375,7 @@ test('Operator normalization consistency', async t => {
     const results = [];
     
     for (const scenario of scenarios) {
-        const { scenarioPath, tempDir } = createTempScenario(scenario.content);
+        const { scenarioPath, tempDir } = await createTempScenario(scenario.content);
         
         try {
             const result = await runGentzenReasoning(scenarioPath, {
@@ -383,7 +385,7 @@ test('Operator normalization consistency', async t => {
         } catch (error) {
             t.fail(`${scenario.name} failed: ${error.message}`);
         } finally {
-            cleanup(tempDir);
+            await cleanup(tempDir);
         }
     }
 

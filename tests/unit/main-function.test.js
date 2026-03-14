@@ -1,9 +1,10 @@
 // main-function.test.js - Unit tests for main function functionality
+//
 
 import test from 'ava';
 import { join } from 'node:path';
 import { EOL } from 'node:os';
-import fs from 'node:fs';
+import fs from 'fs-extra';
 import os from 'node:os';
 import { runGentzenReasoning, displayResults } from '../../main.js';
 import { allMockResolvers } from '../scenarios/test-resolvers/mockResolvers.js';
@@ -13,10 +14,10 @@ const testDir = import.meta.dirname;
 const testScenariosPath = join(testDir, '../scenarios/test-scenarios');
 const testResolversPath = join(testDir, '../scenarios/test-resolvers');
 
-function createTempScenario(content) {
-    const tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'gentzen-main-test-'));
+async function createTempScenario(content) {
+    const tmpDir = await fs.mkdtemp(join(os.tmpdir(), 'gentzen-main-test-'));
     const tmpFile = join(tmpDir, 'test-scenario.yaml');
-    fs.writeFileSync(tmpFile, content, 'utf8');
+    await fs.writeFile(tmpFile, content, 'utf8');
     return { tmpFile, tmpDir };
 }
 
@@ -308,11 +309,9 @@ test('displayResults - proven target with path display', async t => {
 });
 
 test('runGentzenReasoning - resolver file import errors trigger warning path', async t => {
-    // Create a resolver directory with a broken .js file
-    //
-    const tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'gentzen-bad-resolvers-'));
+    const tmpDir = await fs.mkdtemp(join(os.tmpdir(), 'gentzen-bad-resolvers-'));
     const badFile = join(tmpDir, 'broken.js');
-    fs.writeFileSync(badFile, 'import { nonexistent } from "totally-fake-module-abc123";\n', 'utf8');
+    await fs.writeFile(badFile, 'import { nonexistent } from "totally-fake-module-abc123";\n', 'utf8');
 
     const scenarioPath = join(testScenariosPath, 'minimal.yaml');
 
@@ -323,14 +322,12 @@ test('runGentzenReasoning - resolver file import errors trigger warning path', a
         assertScenarioStructure(t, results);
         t.true(results.resolverErrors.length > 0);
     } finally {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
+        await fs.remove(tmpDir);
     }
 });
 
 test('runGentzenReasoning - validate verbose with invalid scenario shows errors and warnings', async t => {
-    // Create a scenario that fails validation AND has warnings
-    //
-    const { tmpFile, tmpDir } = createTempScenario(
+    const { tmpFile, tmpDir } = await createTempScenario(
         `targets: []${EOL}propositions:${EOL}  - lowercase${EOL}`
     );
 
@@ -342,14 +339,12 @@ test('runGentzenReasoning - validate verbose with invalid scenario shows errors 
         });
         assertScenarioStructure(t, results);
     } finally {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
+        await fs.remove(tmpDir);
     }
 });
 
 test('runGentzenReasoning - selectiveResolution with empty scenario catches gracefully', async t => {
-    // Create an empty YAML file that parses to null
-    //
-    const { tmpFile, tmpDir } = createTempScenario('');
+    const { tmpFile, tmpDir } = await createTempScenario('');
 
     try {
         await t.throwsAsync(async () => {
@@ -359,7 +354,7 @@ test('runGentzenReasoning - selectiveResolution with empty scenario catches grac
             });
         });
     } finally {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
+        await fs.remove(tmpDir);
     }
 });
 

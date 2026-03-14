@@ -482,19 +482,16 @@ test('expandOneLevel - generates conjunctions and disjunctions from propositions
 // searchForProof - queue size overflow
 //
 
-test('searchForProof - returns false when search space exhausted', t => {
+test('searchForProof - returns false when depth too shallow for nested target', t => {
     const system = new GentzenSystem();
-    // Add many propositions to create a large search space
-    //
-    for (let i = 0; i < 20; i += 1) {
-        system.addProposition(`Prop${i}`);
-    }
+    system.addProposition('Prop0');
+    system.addProposition('Prop1');
+    system.addProposition('Prop2');
+    system.addProposition('Prop3');
 
-    // Search for something that requires many derivation steps
+    // Requires multiple expansion levels to build nested conjunctions, maxDepth 1 is too shallow
     //
-    const result = system.searchForProof('(((Prop0 ∧ Prop1) ∧ (Prop2 ∧ Prop3)) ∧ ((Prop4 ∧ Prop5) ∧ (Prop6 ∧ Prop7)))');
+    const result = system.searchForProof('((Prop0 ∧ Prop1) ∧ (Prop2 ∧ Prop3))', 1);
 
-    // Should not throw; may or may not prove depending on limits
-    //
-    t.is(typeof result.proven, 'boolean');
+    t.false(result.proven);
 });

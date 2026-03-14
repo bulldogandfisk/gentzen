@@ -50,7 +50,7 @@ test('multiple concurrent executions - avg under 500ms', async t => {
     t.true(avgDuration < 500, `Average execution too slow: ${avgDuration}ms`);
 });
 
-test('memory stability - 50 iterations without crash', async t => {
+test('50 iterations complete without crash', async t => {
     const scenarioPath = join(fixturesPath, 'scenario-no-facts.yaml');
     const iterations = 50;
 
@@ -60,13 +60,9 @@ test('memory stability - 50 iterations without crash', async t => {
         });
 
         assertScenarioStructure(t, results);
-
-        if (i % 10 === 0 && global.gc) {
-            global.gc();
-        }
     }
 
-    t.pass('Memory usage test completed without crashes');
+    t.pass('Completed 50 iterations without crashes');
 });
 
 test('resolver loading performance - completes under 1s', async t => {

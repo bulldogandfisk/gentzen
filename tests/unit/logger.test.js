@@ -163,6 +163,83 @@ test('createLogger - defaults to INFO level', t => {
     t.is(messages.length, 1);
 });
 
+test('createLogger - LOG_LEVEL=DEBUG enables debug output', t => {
+    const original = process.env.LOG_LEVEL;
+    process.env.LOG_LEVEL = 'DEBUG';
+    try {
+        const { messages, outputFunction } = createCapture();
+        const logger = createLogger({ outputFunction });
+        logger.debug('debug visible');
+        t.is(messages.length, 1);
+        t.true(messages[0].message.includes('debug visible'));
+    } finally {
+        if (original === undefined) {
+            delete process.env.LOG_LEVEL;
+        } else {
+            process.env.LOG_LEVEL = original;
+        }
+    }
+});
+
+test('createLogger - LOG_LEVEL=WARN suppresses info', t => {
+    const original = process.env.LOG_LEVEL;
+    process.env.LOG_LEVEL = 'WARN';
+    try {
+        const { messages, outputFunction } = createCapture();
+        const logger = createLogger({ outputFunction });
+        logger.info('suppressed');
+        logger.warn('visible');
+        t.is(messages.length, 1);
+        t.true(messages[0].message.includes('visible'));
+    } finally {
+        if (original === undefined) {
+            delete process.env.LOG_LEVEL;
+        } else {
+            process.env.LOG_LEVEL = original;
+        }
+    }
+});
+
+test('createLogger - LOG_LEVEL=ERROR suppresses warn and below', t => {
+    const original = process.env.LOG_LEVEL;
+    process.env.LOG_LEVEL = 'ERROR';
+    try {
+        const { messages, outputFunction } = createCapture();
+        const logger = createLogger({ outputFunction });
+        logger.info('no');
+        logger.warn('no');
+        logger.error('yes');
+        t.is(messages.length, 1);
+        t.true(messages[0].message.includes('yes'));
+    } finally {
+        if (original === undefined) {
+            delete process.env.LOG_LEVEL;
+        } else {
+            process.env.LOG_LEVEL = original;
+        }
+    }
+});
+
+test('createLogger - LOG_LEVEL=SILENT suppresses all output', t => {
+    const original = process.env.LOG_LEVEL;
+    process.env.LOG_LEVEL = 'SILENT';
+    try {
+        const { messages, outputFunction } = createCapture();
+        const logger = createLogger({ outputFunction });
+        logger.debug('no');
+        logger.info('no');
+        logger.warn('no');
+        logger.error('no');
+        t.is(messages.length, 0);
+    } finally {
+        if (original === undefined) {
+            delete process.env.LOG_LEVEL;
+        } else {
+            process.env.LOG_LEVEL = original;
+        }
+    }
+});
+
 test('configure - updates level at runtime', t => {
     const { messages, outputFunction } = createCapture();
     const logger = new Logger({ level: LogLevel.WARN, outputFunction });

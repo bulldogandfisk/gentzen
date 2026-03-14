@@ -23,7 +23,7 @@
   },
   "scripts": {
     "outdated": "yarn upgrade-interactive",
-    "test": "ava --verbose && yarn test:examples",
+    "test": "c8 ava --verbose && yarn test:examples",
     "test:unit": "ava tests/unit/**/*.test.js",
     "test:integration": "ava tests/integration/**/*.test.js",
     "test:performance": "ava tests/performance/**/*.test.js",

@@ -1,20 +1,9 @@
 import test from 'ava';
 import { runGentzenReasoning } from '../../main.js';
 import { join } from 'node:path';
+import { assertProven, assertNotProven } from '../helpers/test-helpers.js';
 
 const testScenariosPath = join(import.meta.dirname, '../scenarios/test-scenarios');
-
-function assertProven(t, target, results) {
-    const targetResult = results.targets.find(r => r.formula === target);
-    t.truthy(targetResult, `Target "${target}" not found in results`);
-    t.true(targetResult.proven, `Target "${target}" was not proven. Missing: ${targetResult.missingFacts.join(', ')}`);
-}
-
-function assertNotProven(t, target, results) {
-    const targetResult = results.targets.find(r => r.formula === target);
-    t.truthy(targetResult, `Target "${target}" not found in results`);
-    t.false(targetResult.proven, `Target "${target}" should not be proven but was`);
-}
 
 test('auto-negation - complete scenario integration', async t => {
     const scenarioPath = join(testScenariosPath, 'auto-negation.yaml');
