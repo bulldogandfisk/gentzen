@@ -176,3 +176,24 @@ test('configure - updates level at runtime', t => {
     t.is(messages.length, 1);
     t.true(messages[0].message.includes('now visible'));
 });
+
+// Console routing without custom outputFunction
+//
+
+test('Logger routes to console methods without outputFunction', t => {
+    const logger = new Logger({
+        level: LogLevel.DEBUG,
+        enableTimestamps: false,
+        enableLabels: false,
+        enableColors: false
+    });
+
+    // These should not throw — they just go to console.log/warn/error
+    //
+    t.notThrows(() => {
+        logger.debug('debug to console');
+        logger.info('info to console');
+        logger.warn('warn to console');
+        logger.error('error to console');
+    });
+});

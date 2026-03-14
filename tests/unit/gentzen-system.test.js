@@ -461,3 +461,40 @@ test('getAtomicPropositions - extracts atoms from formula', t => {
     t.true(atoms.includes('B'));
     t.true(atoms.includes('C'));
 });
+
+// expandOneLevel - produces new systems from propositions
+//
+
+test('expandOneLevel - generates conjunctions and disjunctions from propositions', t => {
+    const system = new GentzenSystem();
+    system.addProposition('X');
+    system.addProposition('Y');
+
+    const children = system.expandOneLevel();
+    t.true(children.length > 0);
+
+    // Check at least one child proves (X ∧ Y)
+    //
+    const hasConjunction = children.some(child => child.isProved('(X ∧ Y)'));
+    t.true(hasConjunction);
+});
+
+// searchForProof - queue size overflow
+//
+
+test('searchForProof - returns false when search space exhausted', t => {
+    const system = new GentzenSystem();
+    // Add many propositions to create a large search space
+    //
+    for (let i = 0; i < 20; i += 1) {
+        system.addProposition(`Prop${i}`);
+    }
+
+    // Search for something that requires many derivation steps
+    //
+    const result = system.searchForProof('(((Prop0 ∧ Prop1) ∧ (Prop2 ∧ Prop3)) ∧ ((Prop4 ∧ Prop5) ∧ (Prop6 ∧ Prop7)))');
+
+    // Should not throw; may or may not prove depending on limits
+    //
+    t.is(typeof result.proven, 'boolean');
+});

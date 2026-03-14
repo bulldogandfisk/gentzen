@@ -138,3 +138,140 @@ test('getConfigSection - returns undefined for unknown section', t => {
     const result = getConfigSection('nonexistent');
     t.is(result, undefined);
 });
+
+test('loadConfig - MAX_PROOF_DEPTH env var is parsed', t => {
+    const orig = process.env.MAX_PROOF_DEPTH;
+    process.env.MAX_PROOF_DEPTH = '8';
+    try {
+        resetConfig();
+        loadConfig();
+        const reasoning = getConfigSection('reasoning');
+        t.is(reasoning.maxProofDepth, 8);
+    } finally {
+        if (orig === undefined) {
+            delete process.env.MAX_PROOF_DEPTH;
+        } else {
+            process.env.MAX_PROOF_DEPTH = orig;
+        }
+    }
+});
+
+test('loadConfig - ENABLE_CACHING env var is parsed', t => {
+    const orig = process.env.ENABLE_CACHING;
+    process.env.ENABLE_CACHING = 'true';
+    try {
+        resetConfig();
+        loadConfig();
+        const perf = getConfigSection('performance');
+        t.is(perf.enableCaching, true);
+    } finally {
+        if (orig === undefined) {
+            delete process.env.ENABLE_CACHING;
+        } else {
+            process.env.ENABLE_CACHING = orig;
+        }
+    }
+});
+
+test('loadConfig - STRICT_MODE env var is parsed', t => {
+    const orig = process.env.STRICT_MODE;
+    process.env.STRICT_MODE = 'true';
+    try {
+        resetConfig();
+        loadConfig();
+        const validation = getConfigSection('validation');
+        t.is(validation.strictMode, true);
+    } finally {
+        if (orig === undefined) {
+            delete process.env.STRICT_MODE;
+        } else {
+            process.env.STRICT_MODE = orig;
+        }
+    }
+});
+
+test('loadConfig - unknown NODE_ENV falls back to defaults', t => {
+    const orig = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'staging';
+    try {
+        resetConfig();
+        loadConfig();
+        const config = getConfig();
+        t.truthy(config.logging);
+        t.truthy(config.reasoning);
+    } finally {
+        if (orig === undefined) {
+            delete process.env.NODE_ENV;
+        } else {
+            process.env.NODE_ENV = orig;
+        }
+    }
+});
+
+test('loadConfig - production NODE_ENV applies production overrides', t => {
+    const orig = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+        resetConfig();
+        loadConfig();
+        const reasoning = getConfigSection('reasoning');
+        t.is(reasoning.maxProofDepth, 3);
+    } finally {
+        if (orig === undefined) {
+            delete process.env.NODE_ENV;
+        } else {
+            process.env.NODE_ENV = orig;
+        }
+    }
+});
+
+test('loadConfig - test NODE_ENV applies test overrides', t => {
+    const orig = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'test';
+    try {
+        resetConfig();
+        loadConfig();
+        const perf = getConfigSection('performance');
+        t.is(perf.enableCaching, false);
+    } finally {
+        if (orig === undefined) {
+            delete process.env.NODE_ENV;
+        } else {
+            process.env.NODE_ENV = orig;
+        }
+    }
+});
+
+test('loadConfig - LOG_LEVEL env var is parsed', t => {
+    const orig = process.env.LOG_LEVEL;
+    process.env.LOG_LEVEL = 'DEBUG';
+    try {
+        resetConfig();
+        loadConfig();
+        const logging = getConfigSection('logging');
+        t.is(logging.level, 0);
+    } finally {
+        if (orig === undefined) {
+            delete process.env.LOG_LEVEL;
+        } else {
+            process.env.LOG_LEVEL = orig;
+        }
+    }
+});
+
+test('loadConfig - non-object section value throws validation error', t => {
+    t.throws(() => {
+        loadConfig({ logging: 'not_an_object' });
+    }, { message: /validation failed/i });
+});
+
+test('onConfigChange - listener error is caught gracefully', t => {
+    onConfigChange(() => {
+        throw new Error('listener boom');
+    });
+
+    t.notThrows(() => {
+        updateConfig({ reasoning: { maxProofDepth: 6 } });
+    });
+    t.is(getConfigSection('reasoning').maxProofDepth, 6);
+});

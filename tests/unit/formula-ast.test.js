@@ -331,3 +331,35 @@ test('isImplication - correct identification', t => {
     t.true(isImplication(createImplication(createAtom('A'), createAtom('B'))));
     t.false(isImplication(createAtom('A')));
 });
+
+// walkAST - unary node traversal
+//
+
+test('walkAST - visits unary node and its child', t => {
+    const neg = negate(createAtom('X'));
+    const visited = [];
+    walkAST(neg, (node) => {
+        if (node.type === ASTNodeType.ATOM) {
+            visited.push(node.name);
+        } else {
+            visited.push(node.operator);
+        }
+    });
+
+    t.deepEqual(visited, [OperatorType.NOT, 'X']);
+});
+
+// validateAST - invalid binary operator
+//
+
+test('validateAST - invalid operator on binary', t => {
+    const node = {
+        type: ASTNodeType.BINARY,
+        operator: 'bogus',
+        left: createAtom('A'),
+        right: createAtom('B')
+    };
+    const result = validateAST(node);
+    t.false(result.isValid);
+    t.true(result.errors.some(e => e.includes('Invalid binary operator')));
+});

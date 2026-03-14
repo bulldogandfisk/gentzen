@@ -41,6 +41,8 @@ Thumbs.db
 
 docs
 
+coverage/
+
 *.crt
 
 # yarn

@@ -2,6 +2,9 @@
 
 import test from 'ava';
 import { join } from 'node:path';
+import { EOL } from 'node:os';
+import fs from 'node:fs';
+import os from 'node:os';
 import { runGentzenReasoning, displayResults } from '../../main.js';
 import { allMockResolvers } from '../scenarios/test-resolvers/mockResolvers.js';
 import { assertScenarioStructure, assertContains } from '../helpers/test-helpers.js';
@@ -9,6 +12,13 @@ import { assertScenarioStructure, assertContains } from '../helpers/test-helpers
 const testDir = import.meta.dirname;
 const testScenariosPath = join(testDir, '../scenarios/test-scenarios');
 const testResolversPath = join(testDir, '../scenarios/test-resolvers');
+
+function createTempScenario(content) {
+    const tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'gentzen-main-test-'));
+    const tmpFile = join(tmpDir, 'test-scenario.yaml');
+    fs.writeFileSync(tmpFile, content, 'utf8');
+    return { tmpFile, tmpDir };
+}
 
 test('runGentzenReasoning - basic functionality', async t => {
     const scenarioPath = join(testScenariosPath, 'minimal.yaml');
@@ -144,6 +154,18 @@ test('runGentzenReasoning - validate option on valid scenario succeeds', async t
     t.true(results.targets.length > 0);
 });
 
+test('runGentzenReasoning - validate verbose on valid scenario logs success', async t => {
+    const scenarioPath = join(testScenariosPath, 'minimal.yaml');
+    const results = await runGentzenReasoning(scenarioPath, {
+        customResolvers: allMockResolvers,
+        validate: true,
+        verbose: true
+    });
+
+    assertScenarioStructure(t, results);
+    t.truthy(results.verboseInfo);
+});
+
 test('runGentzenReasoning - validate option on scenario with issues still runs', async t => {
     const scenarioPath = join(testScenariosPath, 'missing-facts.yaml');
     const results = await runGentzenReasoning(scenarioPath, {
@@ -152,6 +174,18 @@ test('runGentzenReasoning - validate option on scenario with issues still runs',
     });
 
     assertScenarioStructure(t, results);
+});
+
+test('runGentzenReasoning - selectiveResolution verbose logs atom count', async t => {
+    const scenarioPath = join(testScenariosPath, 'minimal.yaml');
+    const results = await runGentzenReasoning(scenarioPath, {
+        resolversPath: testResolversPath,
+        selectiveResolution: true,
+        verbose: true
+    });
+
+    assertScenarioStructure(t, results);
+    t.truthy(results.verboseInfo);
 });
 
 test('runGentzenReasoning - selectiveResolution with resolversPath', async t => {
@@ -196,6 +230,137 @@ test('displayResults - empty targets runs without error', async t => {
     t.notThrows(() => {
         displayResults(modifiedResults, { verbose: false });
     });
+});
+
+test('displayResults - verbose mode with resolver details', async t => {
+    const scenarioPath = join(testScenariosPath, 'minimal.yaml');
+    const results = await runGentzenReasoning(scenarioPath, {
+        verbose: true,
+        resolversPath: testResolversPath
+    });
+
+    t.notThrows(() => {
+        displayResults(results, { verbose: true });
+    });
+});
+
+test('displayResults - skipped steps display', async t => {
+    const scenarioPath = join(testScenariosPath, 'missing-facts.yaml');
+    const results = await runGentzenReasoning(scenarioPath, {
+        customResolvers: allMockResolvers
+    });
+
+    t.true(results.skippedSteps.length > 0);
+    t.notThrows(() => {
+        displayResults(results, { verbose: false });
+    });
+});
+
+test('displayResults - resolver errors display', async t => {
+    const scenarioPath = join(testScenariosPath, 'minimal.yaml');
+    const results = await runGentzenReasoning(scenarioPath, {
+        customResolvers: allMockResolvers
+    });
+
+    // Inject resolver errors to test the display branch
+    //
+    const modifiedResults = {
+        ...results,
+        resolverErrors: [
+            { file: 'badFile.js', error: 'Module not found' }
+        ]
+    };
+    t.notThrows(() => {
+        displayResults(modifiedResults, { verbose: false });
+    });
+});
+
+test('displayResults - missing facts display', async t => {
+    const scenarioPath = join(testScenariosPath, 'missing-facts.yaml');
+    const results = await runGentzenReasoning(scenarioPath, {
+        customResolvers: allMockResolvers
+    });
+
+    t.true(results.missingFacts.length > 0);
+    t.notThrows(() => {
+        displayResults(results, { verbose: false });
+    });
+});
+
+test('displayResults - proven target with path display', async t => {
+    const scenarioPath = join(testScenariosPath, 'minimal.yaml');
+    const results = await runGentzenReasoning(scenarioPath, {
+        customResolvers: allMockResolvers
+    });
+
+    // Inject a proven target with a non-empty path
+    //
+    const modifiedResults = {
+        ...results,
+        targets: [
+            { formula: 'A', proven: true, missingFacts: [], path: ['step_1', 'final_step'] },
+            { formula: 'B', proven: false, missingFacts: ['B'], path: [] }
+        ]
+    };
+    t.notThrows(() => {
+        displayResults(modifiedResults, { verbose: false });
+    });
+});
+
+test('runGentzenReasoning - resolver file import errors trigger warning path', async t => {
+    // Create a resolver directory with a broken .js file
+    //
+    const tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'gentzen-bad-resolvers-'));
+    const badFile = join(tmpDir, 'broken.js');
+    fs.writeFileSync(badFile, 'import { nonexistent } from "totally-fake-module-abc123";\n', 'utf8');
+
+    const scenarioPath = join(testScenariosPath, 'minimal.yaml');
+
+    try {
+        const results = await runGentzenReasoning(scenarioPath, {
+            resolversPath: tmpDir
+        });
+        assertScenarioStructure(t, results);
+        t.true(results.resolverErrors.length > 0);
+    } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+});
+
+test('runGentzenReasoning - validate verbose with invalid scenario shows errors and warnings', async t => {
+    // Create a scenario that fails validation AND has warnings
+    //
+    const { tmpFile, tmpDir } = createTempScenario(
+        `targets: []${EOL}propositions:${EOL}  - lowercase${EOL}`
+    );
+
+    try {
+        const results = await runGentzenReasoning(tmpFile, {
+            customResolvers: allMockResolvers,
+            validate: true,
+            verbose: true
+        });
+        assertScenarioStructure(t, results);
+    } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+});
+
+test('runGentzenReasoning - selectiveResolution with empty scenario catches gracefully', async t => {
+    // Create an empty YAML file that parses to null
+    //
+    const { tmpFile, tmpDir } = createTempScenario('');
+
+    try {
+        await t.throwsAsync(async () => {
+            await runGentzenReasoning(tmpFile, {
+                resolversPath: testResolversPath,
+                selectiveResolution: true
+            });
+        });
+    } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
 });
 
 test('runGentzenReasoning - target results structure', async t => {

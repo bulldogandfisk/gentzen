@@ -213,9 +213,18 @@ test('parser throws error for invalid formulas', t => {
     }, { message: /Unexpected character/ });
 });
 
+test('parser throws error for trailing tokens after complete formula', t => {
+    const tokens = tokenize('A B');
+    const parser = new FormulaParser(tokens);
+    t.throws(() => parser.parse(), {
+        instanceOf: ParseError,
+        message: /Unexpected token/
+    });
+});
+
 // validateFormulaSyntax and getParseInfo tests
 import { validateFormulaSyntax, getParseInfo } from '../../utilities/formulaParser.js';
-import { getCanonicalOperator, isOperator } from '../../utilities/formulaLexer.js';
+import { Token, TokenType as LexerTokenType, FormulaLexer, getCanonicalOperator, isOperator } from '../../utilities/formulaLexer.js';
 
 test('validateFormulaSyntax - valid formula returns isValid true', t => {
     const result = validateFormulaSyntax('A ∧ B');
@@ -315,6 +324,50 @@ test('tokenizer still recognizes NOT as operator when standalone', t => {
     t.is(nonEof[0].value, 'not');
     t.is(nonEof[1].type, 'IDENTIFIER');
     t.is(nonEof[1].value, 'A');
+});
+
+// Token.toString
+//
+
+test('Token toString formats correctly', t => {
+    const tok = new Token(LexerTokenType.IDENTIFIER, 'Foo', 5);
+    t.is(tok.toString(), `Token(IDENTIFIER, 'Foo', 5)`);
+});
+
+// FormulaLexer.peek
+//
+
+test('FormulaLexer peek returns next character without advancing', t => {
+    const lexer = new FormulaLexer('AB');
+    t.is(lexer.peek(), 'B');
+    t.is(lexer.current_char, 'A');
+});
+
+test('FormulaLexer peek returns null at end of input', t => {
+    const lexer = new FormulaLexer('A');
+    t.is(lexer.peek(), null);
+});
+
+// FormulaLexer error paths
+//
+
+test('FormulaLexer readIdentifier throws on non-letter start', t => {
+    const lexer = new FormulaLexer('A');
+    lexer.position = 0;
+    lexer.current_char = '9';
+    t.throws(() => {
+        lexer.readIdentifier();
+    }, { message: /Invalid identifier start character/ });
+});
+
+test('FormulaLexer readOperator throws for unknown operator char', t => {
+    const lexer = new FormulaLexer('#');
+    // '#' is not in OPERATOR_MAPPINGS and startsOperator would return false,
+    // but if we call readOperator directly it should throw
+    //
+    t.throws(() => {
+        lexer.readOperator();
+    }, { message: /Unknown operator/ });
 });
 
 // Integration tests with existing scenarios

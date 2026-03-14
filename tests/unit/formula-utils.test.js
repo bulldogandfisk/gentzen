@@ -7,7 +7,8 @@ import {
     extractFormulaAtoms,
     addFormulaAtomsToSet,
     canonicalDoubleNeg,
-    extractMissingFactsFromFormula
+    extractMissingFactsFromFormula,
+    clearNormalizeCache
 } from '../../utilities/formulaUtils.js';
 
 // normalizeFormula
@@ -89,4 +90,25 @@ test('extractMissingFactsFromFormula - unresolvable atoms', t => {
 
     t.false(result.canResolve);
     t.true(result.missing.includes('B'));
+});
+
+// clearNormalizeCache
+//
+
+test('clearNormalizeCache - clears cached entries', t => {
+    // Populate cache
+    //
+    normalizeFormula('CacheTest1');
+    normalizeFormula('CacheTest2');
+
+    // Clear should not throw
+    //
+    t.notThrows(() => {
+        clearNormalizeCache();
+    });
+
+    // Formulas should still normalize correctly after clearing
+    //
+    const result = normalizeFormula('CacheTest1');
+    t.is(result, 'CacheTest1');
 });

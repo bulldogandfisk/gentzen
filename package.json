@@ -28,7 +28,29 @@
     "test:integration": "ava tests/integration/**/*.test.js",
     "test:performance": "ava tests/performance/**/*.test.js",
     "test:examples": "node examples/run-all-examples.js",
-    "test:watch": "ava --watch"
+    "test:watch": "ava --watch",
+    "test:coverage": "c8 ava"
+  },
+  "c8": {
+    "all": true,
+    "src": ["."],
+    "include": [
+      "main.js",
+      "gentzen.js",
+      "loadFromYaml.js",
+      "validator.js",
+      "resolverDiscovery.js",
+      "utilities/**/*.js"
+    ],
+    "exclude": [
+      "tests/**",
+      "examples/**",
+      "excluded/**",
+      "node_modules/**",
+      "ava.config.js"
+    ],
+    "reporter": ["text", "html"],
+    "check-coverage": false
   },
   "exports": {
     ".": "./main.js",
@@ -42,7 +64,8 @@
     "yaml": "^2.8.1"
   },
   "devDependencies": {
-    "ava": "^6.4.1"
+    "ava": "^6.4.1",
+    "c8": "^11.0.0"
   },
   "packageManager": "yarn@4.5.3"
 }

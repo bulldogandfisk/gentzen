@@ -147,3 +147,25 @@ test('validateAndDisplay - returns results for invalid scenario', async t => {
     t.false(result.isValid);
     t.true(result.errors.length > 0);
 });
+
+test('validateScenario - closing paren before opening returns error', async t => {
+    const tmpFile = createTempScenario(`targets:${EOL}  - ")A ∧ B("${EOL}`);
+    const result = await validateScenario(tmpFile);
+
+    t.false(result.isValid);
+    t.true(result.errors.some(e => e.includes('unbalanced parentheses')));
+});
+
+test('validateAndDisplay - verbose with warnings shows details', async t => {
+    const tmpFile = createTempScenario(`targets:${EOL}  - "A ∧ B"${EOL}propositions:${EOL}  - lowercase${EOL}`);
+    const result = await validateAndDisplay(tmpFile, true);
+
+    t.true(result.warnings.length > 0);
+});
+
+test('validateAndDisplay - valid scenario non-verbose path', async t => {
+    const scenarioPath = join(testScenariosPath, 'minimal.yaml');
+    const result = await validateAndDisplay(scenarioPath, false);
+
+    t.true(result.isValid);
+});
