@@ -1,9 +1,23 @@
 {
   "name": "gentzen",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "license": "SSPL-1.0",
   "description": "Formal reasoning for agents",
   "type": "module",
+  "files": [
+    "main.js",
+    "gentzen.js",
+    "loadFromYaml.js",
+    "resolverDiscovery.js",
+    "validator.js",
+    "index.d.ts",
+    "validator.d.ts",
+    "utilities/",
+    "schemas/",
+    "examples/",
+    "README.md",
+    "LICENSE.md"
+  ],
   "engines": {
     "node": ">=24.x"
   },
