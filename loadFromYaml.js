@@ -7,18 +7,33 @@ import { createLogger } from './utilities/logger.js';
 import { getConfigSection } from './utilities/config.js';
 import { addFormulaAtomsToSet } from './utilities/formulaUtils.js';
 
-// Collect all atomic propositions that are referenced (but don't validate)
+// Thrown when a resolver fails (sync throw or rejected Promise). Cancels the
+// whole scenario run. The system observed an outage in its sensors; the agent
+// should not act on incomplete or unreliable data.
+//
+export class ScenarioAbortedError extends Error {
+    constructor(resolverName, cause) {
+        const causeMessage = cause?.message ?? String(cause);
+        super(`Scenario aborted: resolver "${resolverName}" failed — ${causeMessage}`);
+        this.name = 'ScenarioAbortedError';
+        this.resolverName = resolverName;
+        this.cause = cause;
+    }
+}
+
+// Collect all atomic propositions that are referenced (but don't validate).
+// Propositions, step `from` formulas, and targets may all be compound formulas;
+// each is parsed and its atoms (with leading negations stripped) are collected.
+//
 export function collectReferencedAtoms(scenario) {
     const referencedAtoms = new Set();
 
-    // Collect from propositions
     if (scenario.propositions) {
         for(const p of scenario.propositions) {
-            referencedAtoms.add(p);
+            addFormulaAtomsToSet(p, referencedAtoms);
         }
     }
 
-    // Collect from steps using proper formula parsing
     if (scenario.steps) {
         for(const step of scenario.steps) {
             if (step.from && Array.isArray(step.from)) {
@@ -29,7 +44,6 @@ export function collectReferencedAtoms(scenario) {
         }
     }
 
-    // Collect from targets using proper formula parsing
     if (scenario.targets) {
         for(const target of scenario.targets) {
             addFormulaAtomsToSet(target, referencedAtoms);
@@ -172,9 +186,9 @@ export async function loadGentzenScenario(yamlPath, factMap = {}, options = {}) 
                         }
                         break;
                     }
-                    case 'equivalence': {
+                    case 'modusPonens': {
                         if (stepObjects.length === 2) {
-                            newStep = system.equivalenceRule(
+                            newStep = system.modusPonensRule(
                                 stepObjects[0],
                                 stepObjects[1]
                             );
@@ -197,39 +211,44 @@ export async function loadGentzenScenario(yamlPath, factMap = {}, options = {}) 
     return { system, targets, referencedAtoms, propositions: scenario.propositions || [] };
 }
 
-// Helper function to run fact resolvers and return a fact map
+// Run fact resolvers and return a fact map.
+//
+// Contract:
+//   - A resolver that throws (sync) or returns a rejected Promise raises
+//     ScenarioAbortedError. The scenario run is cancelled; the caller is
+//     responsible for propagating that to the agent.
+//   - Falsy return values (false, 0, '', null, undefined, NaN) are treated as
+//     the resolver's "no" answer. Resolver authors own the distinction
+//     between intentional false and missing data inside their resolver.
+//   - Truthy values are coerced to true.
+//
 export async function runFactResolvers(factResolvers) {
-    // Create logger for this operation
-    const logConfig = getConfigSection('logging');
-    const logger = createLogger(logConfig);
-    
     const factMap = {};
-    
+
     for (const [factName, resolver] of Object.entries(factResolvers)) {
-        try {
-            if (typeof resolver === 'function') {
-                const result = resolver();
-                // Handle async functions by properly awaiting them
-                if (result instanceof Promise) {
-                    try {
-                        const awaitedResult = await result;
-                        factMap[factName] = Boolean(awaitedResult);
-                    } catch (error) {
-                        logger.warn(`Fact resolver for "${factName}" failed: ${error.message}`);
-                        factMap[factName] = false;
-                    }
-                } else {
-                    factMap[factName] = Boolean(result);
-                }
-            } else {
-                factMap[factName] = Boolean(resolver);
+        if (typeof resolver === 'function') {
+            let result;
+            try {
+                result = resolver();
+            } catch (error) {
+                throw new ScenarioAbortedError(factName, error);
             }
-        } catch (error) {
-            logger.warn(`Fact resolver for "${factName}" failed: ${error.message}`);
-            factMap[factName] = false;
+            if (result instanceof Promise) {
+                let awaited;
+                try {
+                    awaited = await result;
+                } catch (error) {
+                    throw new ScenarioAbortedError(factName, error);
+                }
+                factMap[factName] = Boolean(awaited);
+            } else {
+                factMap[factName] = Boolean(result);
+            }
+        } else {
+            factMap[factName] = Boolean(resolver);
         }
     }
-    
+
     return factMap;
 }
 

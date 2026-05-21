@@ -1,10 +1,10 @@
 import { join } from 'node:path';
 import test from 'ava';
-import { runGentzenReasoning } from '../../main.js';
+import { runGentzenReasoning, isAbortedResults, ScenarioAbortedError } from '../../main.js';
 import { createFailingMockResolver } from '../scenarios/test-resolvers/mockResolvers.js';
-import { 
-    assertScenarioStructure, 
-    assertContains 
+import {
+    assertScenarioStructure,
+    assertContains
 } from '../helpers/test-helpers.js';
 
 // Integration tests for error condition handling
@@ -14,32 +14,39 @@ const testDir = import.meta.dirname;
 const testScenariosPath = join(testDir, '../scenarios/test-scenarios');
 const errorResolversPath = join(testDir, '../scenarios/error-resolvers');
 
-test('resolver errors - graceful handling', async t => {
+test('sync-throwing resolver aborts the scenario', async t => {
+    // Resolver exceptions are sensor outages, not data. The run is cancelled.
+    //
     const scenarioPath = join(testScenariosPath, 'minimal.yaml');
     const results = await runGentzenReasoning(scenarioPath, {
         customResolvers: {
             UserWantsEuropeanFlight: createFailingMockResolver('Test resolver error')
         }
     });
-    
-    assertScenarioStructure(t, results);
-    t.is(results.factResolutions.UserWantsEuropeanFlight, false);
+
+    t.true(isAbortedResults(results));
+    t.is(results.reason, 'resolver_error');
+    t.is(results.resolverName, 'UserWantsEuropeanFlight');
+    assertContains(t, results.cause, 'Test resolver error');
 });
 
-test('multiple resolver errors', async t => {
+test('multiple failing resolvers - first failure aborts', async t => {
     const scenarioPath = join(testScenariosPath, 'all-rules.yaml');
     const results = await runGentzenReasoning(scenarioPath, {
         customResolvers: {
             UserWantsEuropeanFlight: createFailingMockResolver('Error 1'),
             UserHasVisa: createFailingMockResolver('Error 2'),
-            ActionA: () => true // This one should work
+            ActionA: () => true
         }
     });
-    
-    assertScenarioStructure(t, results);
-    t.is(results.factResolutions.UserWantsEuropeanFlight, false);
-    t.is(results.factResolutions.UserHasVisa, false);
-    t.is(results.factResolutions.ActionA, true);
+
+    t.true(isAbortedResults(results));
+    t.is(results.reason, 'resolver_error');
+    // Order of resolver execution is the iteration order of Object.entries on
+    // the merged map. The test asserts one of the two failing resolvers
+    // surfaced; both are valid.
+    //
+    t.true(['UserWantsEuropeanFlight', 'UserHasVisa'].includes(results.resolverName));
 });
 
 test('invalid scenario YAML - malformed syntax', async t => {
@@ -79,19 +86,17 @@ test('nonexistent resolver directory', async t => {
     t.is(results.summary.totalResolvers, 0);
 });
 
-test('resolver file import errors', async t => {
+test('resolver file import errors propagate as scenario aborts', async t => {
     const scenarioPath = join(testScenariosPath, 'minimal.yaml');
     const results = await runGentzenReasoning(scenarioPath, {
-        resolversPath: errorResolversPath // Contains resolvers that throw errors
+        resolversPath: errorResolversPath
     });
-    
-    assertScenarioStructure(t, results);
-    // Should handle resolver errors and set facts to false
-    t.true('UserWantsEuropeanFlight' in results.factResolutions);
-    t.is(results.factResolutions.UserWantsEuropeanFlight, false);
+
+    t.true(isAbortedResults(results));
+    t.is(results.reason, 'resolver_error');
 });
 
-test('mixed working and failing resolvers', async t => {
+test('mixed working and failing resolvers - any failure aborts', async t => {
     const scenarioPath = join(testScenariosPath, 'minimal.yaml');
     const results = await runGentzenReasoning(scenarioPath, {
         customResolvers: {
@@ -100,14 +105,13 @@ test('mixed working and failing resolvers', async t => {
             AnotherWorkingResolver: () => false
         }
     });
-    
-    assertScenarioStructure(t, results);
-    t.is(results.factResolutions.WorkingResolver, true);
-    t.is(results.factResolutions.FailingResolver, false);
-    t.is(results.factResolutions.AnotherWorkingResolver, false);
+
+    t.true(isAbortedResults(results));
+    t.is(results.resolverName, 'FailingResolver');
+    assertContains(t, results.cause, 'This should fail');
 });
 
-test('async resolver errors', async t => {
+test('async-rejecting resolver aborts the scenario', async t => {
     const scenarioPath = join(testScenariosPath, 'minimal.yaml');
     const results = await runGentzenReasoning(scenarioPath, {
         customResolvers: {
@@ -117,11 +121,42 @@ test('async resolver errors', async t => {
             SyncWorkingResolver: () => true
         }
     });
-    
-    assertScenarioStructure(t, results);
-    // Async resolvers that throw errors should resolve to false
-    t.is(results.factResolutions.AsyncFailingResolver, false);
-    t.is(results.factResolutions.SyncWorkingResolver, true);
+
+    t.true(isAbortedResults(results));
+    t.is(results.resolverName, 'AsyncFailingResolver');
+    assertContains(t, results.cause, 'Async error');
+});
+
+test('falsy resolver returns are not aborts (false/0/empty/null/undefined)', async t => {
+    // Contract: falsy = false. Only throws/rejections abort. Resolver authors
+    // own the "do I have data?" question inside the resolver.
+    //
+    const scenarioPath = join(testScenariosPath, 'minimal.yaml');
+    const results = await runGentzenReasoning(scenarioPath, {
+        customResolvers: {
+            ReturnsFalse: () => false,
+            ReturnsZero: () => 0,
+            ReturnsEmpty: () => '',
+            ReturnsNull: () => null,
+            ReturnsUndefined: () => undefined
+        }
+    });
+
+    t.false(isAbortedResults(results));
+    t.is(results.factResolutions.ReturnsFalse, false);
+    t.is(results.factResolutions.ReturnsZero, false);
+    t.is(results.factResolutions.ReturnsEmpty, false);
+    t.is(results.factResolutions.ReturnsNull, false);
+    t.is(results.factResolutions.ReturnsUndefined, false);
+});
+
+test('ScenarioAbortedError is exported and matches abort results', t => {
+    t.is(typeof ScenarioAbortedError, 'function');
+    const e = new ScenarioAbortedError('Foo', new Error('boom'));
+    t.is(e.resolverName, 'Foo');
+    t.true(e instanceof Error);
+    t.true(e.message.includes('Foo'));
+    t.true(e.message.includes('boom'));
 });
 
 test('null and undefined resolver handling', async t => {
@@ -176,23 +211,23 @@ test('timeout handling simulation', async t => {
     t.is(results.factResolutions.UserWantsEuropeanFlight, true);
 });
 
-test('recursive resolver error', async t => {
+test('recursive resolver error aborts the scenario', async t => {
     let callCount = 0;
     const recursiveResolver = () => {
         callCount++;
         if (callCount > 1) {
             throw new Error('Recursive call detected');
         }
-        return recursiveResolver(); // This would cause infinite recursion
+        return recursiveResolver(); // self-call triggers throw
     };
-    
+
     const scenarioPath = join(testScenariosPath, 'minimal.yaml');
     const results = await runGentzenReasoning(scenarioPath, {
         customResolvers: {
             UserWantsEuropeanFlight: recursiveResolver
         }
     });
-    
-    assertScenarioStructure(t, results);
-    t.is(results.factResolutions.UserWantsEuropeanFlight, false);
+
+    t.true(isAbortedResults(results));
+    t.is(results.resolverName, 'UserWantsEuropeanFlight');
 });

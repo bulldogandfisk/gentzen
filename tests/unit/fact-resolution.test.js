@@ -48,18 +48,19 @@ test('runFactResolvers - mixed boolean results', async t => {
     t.is(factMap.UndefinedFact, false);
 });
 
-test('runFactResolvers - error handling', async t => {
+test('runFactResolvers - throwing resolver raises ScenarioAbortedError', async t => {
     const resolvers = {
         GoodFact: () => true,
         ErrorFact: () => { throw new Error('Test error'); },
         AnotherGoodFact: () => false
     };
-    
-    const factMap = await runFactResolvers(resolvers);
-    
-    t.is(factMap.GoodFact, true);
-    t.is(factMap.ErrorFact, false); // Should be false due to error
-    t.is(factMap.AnotherGoodFact, false);
+
+    const err = await t.throwsAsync(async () => {
+        await runFactResolvers(resolvers);
+    });
+    t.is(err.name, 'ScenarioAbortedError');
+    t.is(err.resolverName, 'ErrorFact');
+    t.true(err.message.includes('Test error'));
 });
 
 test('runFactResolvers - non-function values', async t => {
@@ -134,37 +135,57 @@ test('createFailingMockResolver - error throwing', t => {
     t.throws(() => errorResolver(), { instanceOf: Error });
 });
 
-test('runFactResolvers - mixed resolver types', async t => {
+test('runFactResolvers - mixed resolver types without throws', async t => {
     const resolvers = {
         StaticTrue: true,
         StaticFalse: false,
         FunctionTrue: () => true,
         FunctionFalse: () => false,
-        ErrorFunction: createFailingMockResolver('Test error'),
         ConditionalFunction: createConditionalMockResolver(() => true)
     };
-    
+
     const factMap = await runFactResolvers(resolvers);
-    
+
     t.is(factMap.StaticTrue, true);
     t.is(factMap.StaticFalse, false);
     t.is(factMap.FunctionTrue, true);
     t.is(factMap.FunctionFalse, false);
-    t.is(factMap.ErrorFunction, false);
     t.is(factMap.ConditionalFunction, true);
+});
+
+test('runFactResolvers - mixed resolver types with one throw aborts', async t => {
+    const resolvers = {
+        StaticTrue: true,
+        FunctionTrue: () => true,
+        ErrorFunction: createFailingMockResolver('Test error')
+    };
+
+    const err = await t.throwsAsync(async () => {
+        await runFactResolvers(resolvers);
+    });
+    t.is(err.name, 'ScenarioAbortedError');
+    t.is(err.resolverName, 'ErrorFunction');
 });
 
 test('runFactResolvers - async function handling', async t => {
     const resolvers = {
         AsyncTrue: async () => true,
-        AsyncFalse: async () => false,
-        AsyncError: async () => { throw new Error('Async error'); }
+        AsyncFalse: async () => false
     };
-    
+
     const factMap = await runFactResolvers(resolvers);
-    
-    // runFactResolvers should handle async functions by properly awaiting them
+
     t.is(factMap.AsyncTrue, true);
     t.is(factMap.AsyncFalse, false);
-    t.is(factMap.AsyncError, false);
+});
+
+test('runFactResolvers - async rejection raises ScenarioAbortedError', async t => {
+    const err = await t.throwsAsync(async () => {
+        await runFactResolvers({
+            AsyncError: async () => { throw new Error('Async error'); }
+        });
+    });
+    t.is(err.name, 'ScenarioAbortedError');
+    t.is(err.resolverName, 'AsyncError');
+    t.true(err.message.includes('Async error'));
 });

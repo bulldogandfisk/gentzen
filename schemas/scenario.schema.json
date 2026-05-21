@@ -9,11 +9,11 @@
     "properties": {
         "propositions": {
             "type": "array",
-            "description": "Atomic propositions referenced by the scenario.",
+            "description": "Propositions referenced by the scenario. Atoms or compound formulas; the engine parses each at load time.",
             "items": {
                 "type": "string",
-                "pattern": "^[A-Z][a-zA-Z0-9]*$",
-                "description": "PascalCase identifier."
+                "minLength": 1,
+                "description": "An atom (e.g. UserAuthenticated) or a compound formula (e.g. '(UserAuthenticated → AllowAccess)')."
             },
             "uniqueItems": true
         },
@@ -45,14 +45,14 @@
                         "beta",
                         "contraposition",
                         "doubleNegation",
-                        "equivalence"
+                        "modusPonens"
                     ],
                     "description": "Inference rule applied at this step."
                 },
                 "subtype": {
                     "type": "string",
-                    "enum": ["and", "implies", "or", "introduction", "elimination"],
-                    "description": "Rule-specific subtype. alpha: 'and' or 'implies'. doubleNegation: 'introduction' or 'elimination'. beta defaults to 'or'."
+                    "enum": ["and", "or", "introduction", "elimination"],
+                    "description": "Rule-specific subtype. alpha: 'and'. doubleNegation: 'introduction' or 'elimination'. beta defaults to 'or'."
                 },
                 "from": {
                     "type": "array",
@@ -70,21 +70,13 @@
                     "if": { "properties": { "rule": { "const": "alpha" } } },
                     "then": {
                         "properties": {
-                            "subtype": { "enum": ["and", "implies"] },
+                            "subtype": { "enum": ["and"] },
                             "from": { "minItems": 2, "maxItems": 2 }
                         }
                     }
                 },
                 {
                     "if": { "properties": { "rule": { "const": "beta" } } },
-                    "then": {
-                        "properties": {
-                            "from": { "minItems": 2, "maxItems": 2 }
-                        }
-                    }
-                },
-                {
-                    "if": { "properties": { "rule": { "const": "equivalence" } } },
                     "then": {
                         "properties": {
                             "from": { "minItems": 2, "maxItems": 2 }
@@ -105,6 +97,14 @@
                         "properties": {
                             "subtype": { "enum": ["introduction", "elimination"] },
                             "from": { "minItems": 1, "maxItems": 1 }
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "rule": { "const": "modusPonens" } } },
+                    "then": {
+                        "properties": {
+                            "from": { "minItems": 2, "maxItems": 2 }
                         }
                     }
                 }

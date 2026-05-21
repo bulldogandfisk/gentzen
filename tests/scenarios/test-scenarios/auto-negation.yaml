@@ -2,63 +2,41 @@
 # Tests that false resolvers automatically make negated facts available
 
 propositions:
-  - AccessGranted
-  - AccessDenied
-  - SystemReady
-  - MaintenanceRequired
+  # Business rules only. Action atoms (AccessGranted, AccessDenied, SystemReady,
+  # MaintenanceRequired) are NOT propositions — they're derived via MP.
+  - ((~UserHasPermission ∧ SecurityEnabled) → AccessDenied)
+  - ((AdminLoggedIn ∧ SystemOnline) → AccessGranted)
+  - ((SystemOnline ∧ ~MaintenanceMode) → SystemReady)
 
 steps:
-  # Test that auto-negated facts work in conjunctions
+  # Build the conjunctions from atomic resolver facts so MP can fire.
   - rule: alpha
     subtype: and
     from:
       - ~UserHasPermission    # Auto-generated from false resolver
       - SecurityEnabled       # From true resolver
-      
-  # Test implication with auto-negated fact
-  - rule: alpha
-    subtype: implies
-    from:
-      - (~UserHasPermission ∧ SecurityEnabled)
-      - AccessDenied
-      
-  # Test that positive facts work normally
+
   - rule: alpha
     subtype: and
     from:
       - AdminLoggedIn         # From true resolver
       - SystemOnline          # From true resolver
-      
-  # Test implication with positive facts
-  - rule: alpha
-    subtype: implies
-    from:
-      - (AdminLoggedIn ∧ SystemOnline)
-      - AccessGranted
-      
-  # Test mixed positive and negative facts
+
   - rule: alpha
     subtype: and
     from:
       - SystemOnline          # From true resolver
       - ~MaintenanceMode      # Auto-generated from false resolver
-      
-  # Test complex implication
-  - rule: alpha
-    subtype: implies
-    from:
-      - (SystemOnline ∧ ~MaintenanceMode)
-      - SystemReady
 
 targets:
   # Should be provable with auto-negation
   - (~UserHasPermission ∧ SecurityEnabled)    # Auto-negated + positive
-  - AccessDenied                               # From implication
+  - AccessDenied                               # Via MP on the implication proposition
   - (AdminLoggedIn ∧ SystemOnline)             # Both positive
-  - AccessGranted                              # From positive implication
-  - (SystemOnline ∧ ~MaintenanceMode)         # Positive + auto-negated
-  - SystemReady                                # From mixed implication
-  
+  - AccessGranted                              # Via MP on the implication proposition
+  - (SystemOnline ∧ ~MaintenanceMode)          # Positive + auto-negated
+  - SystemReady                                # Via MP on the implication proposition
+
   # Should fail - trying to prove positive facts that resolved false
   - UserHasPermission                          # Should be missing
   - MaintenanceMode                            # Should be missing

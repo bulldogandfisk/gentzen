@@ -155,7 +155,10 @@ test('verbose mode performance impact - under 1.5x slower', async t => {
     }
 });
 
-test('error handling performance - all errors under 2s', async t => {
+test('error handling performance - throwing resolver aborts under 2s', async t => {
+    // A throwing resolver aborts the scenario rather than degrading to false.
+    // This test asserts the abort is fast and structured, not slow or silent.
+    //
     const scenarioPath = join(fixturesPath, 'mixed-scenario.yaml');
 
     const errorResolvers = {};
@@ -166,19 +169,12 @@ test('error handling performance - all errors under 2s', async t => {
     }
 
     const startTime = Date.now();
-
     const results = await runGentzenReasoning(scenarioPath, {
         customResolvers: errorResolvers
     });
-
     const duration = Date.now() - startTime;
 
-    assertScenarioStructure(t, results);
-    t.true(duration < 2000, `Error handling too slow: ${duration}ms`);
-
-    for (const [factName, resolved] of Object.entries(results.factResolutions)) {
-        if (factName in errorResolvers) {
-            t.is(resolved, false, `Fact ${factName} should be false due to error`);
-        }
-    }
+    t.true(results.aborted === true, 'scenario must abort on resolver throw');
+    t.is(results.reason, 'resolver_error');
+    t.true(duration < 2000, `Abort too slow: ${duration}ms`);
 });

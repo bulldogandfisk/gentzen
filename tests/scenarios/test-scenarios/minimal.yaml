@@ -2,8 +2,10 @@ propositions:
   - SimpleAction
 
 steps:
+  # Minimal step: when no resolvers run, UserWantsEuropeanFlight is missing
+  # and the step is recorded as skipped with reason 'missing_fact'.
   - rule: alpha
-    subtype: implies
+    subtype: and
     from:
       - UserWantsEuropeanFlight
       - SimpleAction

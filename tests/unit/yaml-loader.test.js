@@ -68,15 +68,24 @@ test('loadGentzenScenario - empty fact resolvers', async t => {
 test('runFactResolvers - function resolvers', async t => {
         const resolvers = {
             TestFact1: () => true,
-            TestFact2: () => false,
-            TestFact3: () => { throw new Error('Test error'); }
+            TestFact2: () => false
         };
-        
+
         const factMap = await runFactResolvers(resolvers);
-        
+
         t.is(factMap.TestFact1, true);
         t.is(factMap.TestFact2, false);
-        t.is(factMap.TestFact3, false); // Should be false due to error
+});
+
+test('runFactResolvers - throwing function aborts via ScenarioAbortedError', async t => {
+        const err = await t.throwsAsync(async () => {
+            await runFactResolvers({
+                TestFact1: () => true,
+                BadFact: () => { throw new Error('Test error'); }
+            });
+        });
+        t.is(err.name, 'ScenarioAbortedError');
+        t.is(err.resolverName, 'BadFact');
 });
 
 test('runFactResolvers - non-function resolvers', async t => {

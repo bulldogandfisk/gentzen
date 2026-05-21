@@ -3,6 +3,8 @@ propositions:
   - PerformMaintenance
   - SendNotification
   - ScheduleBackup
+  - ((SystemHealthy ∧ DatabaseConnected) → SystemAlert)
+  - (BackupCompleted → ScheduleBackup)
 
 steps:
   # STEP 1: (SystemHealthy ∧ DatabaseConnected)
@@ -12,21 +14,7 @@ steps:
       - SystemHealthy
       - DatabaseConnected
 
-  # STEP 2: ((SystemHealthy ∧ DatabaseConnected) → SystemAlert)
-  - rule: alpha
-    subtype: implies
-    from:
-      - (SystemHealthy ∧ DatabaseConnected)
-      - SystemAlert
-
-  # STEP 3: (BackupCompleted → ScheduleBackup)
-  - rule: alpha
-    subtype: implies
-    from:
-      - BackupCompleted
-      - ScheduleBackup
-
-  # STEP 4: (SecurityScanPassed ∧ DiskSpaceAvailable)
+  # STEP 2: (SecurityScanPassed ∧ DiskSpaceAvailable)
   - rule: alpha
     subtype: and
     from:

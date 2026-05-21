@@ -37,27 +37,23 @@ test('runFactResolvers - no auto-negation for already negated names', async t =>
     t.false(factMap.UserIsGuest);
 });
 
-test('runFactResolvers - mixed resolver types with auto-negation', async t => {
+test('runFactResolvers - mixed resolver types (no throws)', async t => {
     const resolvers = {
         // Function resolvers
         DatabaseConnected: () => true,
         BackupRunning: () => false,
-        
+
         // Static value resolvers
         IsProduction: true,
-        IsTestMode: false,
-        
-        // Error resolver
-        FailingCheck: () => { throw new Error('Test error'); }
+        IsTestMode: false
     };
-    
+
     const factMap = await runFactResolvers(resolvers);
-    
+
     t.true(factMap.DatabaseConnected);
     t.false(factMap.BackupRunning);
     t.true(factMap.IsProduction);
     t.false(factMap.IsTestMode);
-    t.false(factMap.FailingCheck);  // Errors become false
 });
 
 test('runFactResolvers - auto-negation integration with system', async t => {
@@ -84,26 +80,23 @@ test('runFactResolvers - auto-negation integration with system', async t => {
     t.false(results.availableFacts.includes('InMaintenanceMode'));
 });
 
-test('auto-negation - fact resolutions tracking', async t => {
+test('auto-negation - fact resolutions tracking (no throwing resolvers)', async t => {
+    // Verifies auto-negation for explicit true/false returns.
+    //
     const resolvers = {
         FeatureEnabled: () => true,
-        FeatureDisabled: () => false,
-        ErrorResolver: () => { throw new Error('Test'); }
+        FeatureDisabled: () => false
     };
-    
+
     const scenarioPath = join(testFixturePath, 'scenarios/scenario-no-facts.yaml');
-    
+
     const results = await runGentzenReasoning(scenarioPath, {
         customResolvers: resolvers
     });
-    
-    // Check fact resolutions show original resolver results
+
     t.true(results.factResolutions.FeatureEnabled);
     t.false(results.factResolutions.FeatureDisabled);
-    t.false(results.factResolutions.ErrorResolver);
-    
-    // But check that auto-negated facts are available
+
     t.true(results.availableFacts.includes('FeatureEnabled'));
     t.true(results.availableFacts.includes('~FeatureDisabled'));
-    t.true(results.availableFacts.includes('~ErrorResolver'));
 });

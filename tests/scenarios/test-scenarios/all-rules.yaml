@@ -1,9 +1,8 @@
 propositions:
-  - ActionA
-  - ActionB
-  - ActionC
-  - ActionD
-  - ActionE
+  # Business rules, stipulated. Action atoms (ActionA..E) are NOT propositions
+  # — they are derived via MP/beta from these rules plus resolver facts.
+  - ((UserWantsEuropeanFlight ∧ UserHasVisa) → ActionA)
+  - (UserWantsEuropeanFlight ↔ ActionC)
 
 steps:
   # Alpha rule - AND
@@ -13,20 +12,13 @@ steps:
       - UserWantsEuropeanFlight
       - UserHasVisa
 
-  # Alpha rule - IMPLIES
-  - rule: alpha
-    subtype: implies
-    from:
-      - (UserWantsEuropeanFlight ∧ UserHasVisa)
-      - ActionA
-
-  # Beta rule - OR
+  # Beta rule - OR (uses ActionA derived via MP from the implication proposition)
   - rule: beta
     from:
       - ActionA
       - ActionB
 
-  # Contraposition
+  # Contraposition (operates on the implication proposition directly)
   - rule: contraposition
     from:
       - ((UserWantsEuropeanFlight ∧ UserHasVisa) → ActionA)
@@ -42,12 +34,6 @@ steps:
     subtype: elimination
     from:
       - ~~UserHasVisa
-
-  # Equivalence
-  - rule: equivalence
-    from:
-      - UserWantsEuropeanFlight
-      - ActionC
 
 targets:
   - (UserWantsEuropeanFlight ∧ UserHasVisa)

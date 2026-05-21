@@ -1,9 +1,10 @@
 # yaml-language-server: $schema=../../schemas/scenario.schema.json
 
 propositions:
-  - ProcessOrder
-  - SendAlert
-  - ScheduleMaintenance
+  # Business rules only. Action atoms ProcessOrder, SendAlert, ScheduleMaintenance
+  # are derived via MP — not stipulated.
+  - ((CustomerIsVIP ∧ PaymentProcessed) → ProcessOrder)
+  - ((SystemHealthy ∧ IsBusinessHours) → ScheduleMaintenance)
 
 steps:
   # Business logic: Customer + Payment
@@ -19,20 +20,6 @@ steps:
     from:
       - SystemHealthy
       - IsBusinessHours
-
-  # Combined business decision
-  - rule: alpha
-    subtype: implies
-    from:
-      - (CustomerIsVIP ∧ PaymentProcessed)
-      - ProcessOrder
-
-  # System maintenance decision
-  - rule: alpha
-    subtype: implies
-    from:
-      - (SystemHealthy ∧ IsBusinessHours)
-      - ScheduleMaintenance
 
 targets:
   - (CustomerIsVIP AND PaymentProcessed)

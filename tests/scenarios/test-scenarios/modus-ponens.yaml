@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=../../../schemas/scenario.schema.json
+# Focused modus-ponens demo: declare an implication as a proposition,
+# declare its antecedent as a proposition, and search for the consequent.
+# BFS fires MP automatically during expandOneLevel.
+#
+propositions:
+  - A
+  - (A → B)
+
+steps:
+  # Explicit MP step so the YAML run also records the derivation.
+  - rule: modusPonens
+    from:
+      - (A → B)
+      - A
+
+targets:
+  - (A → B)
+  - B

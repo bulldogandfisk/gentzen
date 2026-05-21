@@ -1,7 +1,7 @@
 import { EOL } from 'node:os';
 import fs from 'fs-extra';
 import YAML from 'yaml';
-import { loadGentzenScenario, runFactResolvers, collectReferencedAtoms } from './loadFromYaml.js';
+import { loadGentzenScenario, runFactResolvers, collectReferencedAtoms, ScenarioAbortedError } from './loadFromYaml.js';
 import { discoverResolvers } from './resolverDiscovery.js';
 import { validateScenario } from './validator.js';
 import { createLogger, LogLevel } from './utilities/logger.js';
@@ -97,6 +97,7 @@ function buildInitialResults(scenarioPath, system, targets, factMap, loadedFiles
         summary: {
             totalTargets: targets.length,
             provenTargets: 0,
+            assertedTargets: 0,
             availableFacts: system.facts.size,
             missingFacts: system.missingFacts.size,
             skippedSteps: system.skippedSteps.length,
@@ -124,10 +125,14 @@ async function evaluateTargets(targets, system, results, { onProof, logger } = {
 
         if (result.proven) {
             results.summary.provenTargets++;
+            if (result.derivation === 'asserted') {
+                results.summary.assertedTargets++;
+            }
         }
         results.targets.push({
             formula: target,
             proven: result.proven,
+            derivation: result.derivation,
             missingFacts: result.missingFacts,
             path: result.path
         });
@@ -137,6 +142,7 @@ async function evaluateTargets(targets, system, results, { onProof, logger } = {
                 await onProof({
                     target,
                     proven: result.proven,
+                    derivation: result.derivation,
                     path: result.path,
                     missingFacts: result.missingFacts,
                     durationMs
@@ -211,15 +217,47 @@ export async function runGentzenReasoning(scenarioPath, options = {}) {
         return results;
 
     } catch (error) {
+        if (error instanceof ScenarioAbortedError) {
+            logger.error(`❌ Scenario aborted: resolver "${error.resolverName}" failed — ${error.cause?.message ?? String(error.cause)}`);
+            return {
+                aborted: true,
+                reason: 'resolver_error',
+                resolverName: error.resolverName,
+                cause: error.cause?.message ?? String(error.cause),
+                scenarioPath
+            };
+        }
         logger.error(`❌ Error running Gentzen reasoning: ${error.message}`);
         throw error;
     }
 }
 
+// True if the result is an aborted-scenario sentinel rather than a normal
+// reasoning result. Callers gating side effects should check this first.
+//
+export function isAbortedResults(results) {
+    return Boolean(results && results.aborted === true);
+}
+
+// Re-export for callers that want to distinguish abort from other errors.
+//
+export { ScenarioAbortedError };
+
 export function displayResults(results, options = {}) {
     const { verbose = false } = options;
     const logConfig = getConfigSection('logging');
     const logger = options.logger || createLogger(logConfig);
+
+    if (isAbortedResults(results)) {
+        const scenarioName = (results.scenarioPath || '').split('/').pop() || '(unknown)';
+        logger.info(`${EOL}${chalk.bold(`📁 Scenario: ${scenarioName}`)}`);
+        logger.error(`${EOL}${chalk.red.bold('⛔ SCENARIO ABORTED')}`);
+        logger.error(`  Reason: ${results.reason}`);
+        logger.error(`  Resolver: ${results.resolverName}`);
+        logger.error(`  Cause: ${results.cause}`);
+        return;
+    }
+
     const { system, verboseInfo, scenarioPath, propositions } = results;
 
     const scenarioName = scenarioPath.split('/').pop();
@@ -262,13 +300,26 @@ export function displayResults(results, options = {}) {
     }
 
     const provenTargets = results.targets.filter(t => t.proven);
+    const assertedTargets = provenTargets.filter(t => t.derivation === 'asserted');
+    const inferredTargets = provenTargets.filter(t => t.derivation === 'inference' || t.derivation === 'derived' || t.derivation === 'fact');
     const failedTargets = results.targets.filter(t => !t.proven);
-    logger.info(`${EOL}${chalk.bold(`Target Results: ${provenTargets.length} proven, ${failedTargets.length} failed`)}`);
+    logger.info(`${EOL}${chalk.bold(`Target Results: ${inferredTargets.length} proven, ${assertedTargets.length} assumed, ${failedTargets.length} failed`)}`);
     for (const target of results.targets) {
         if (target.proven) {
-            logger.info(`  ${chalk.green('✅ PROVEN:')} ${target.formula}`);
-            if (target.path.length > 0) {
-                logger.info(`     ${chalk.gray('Path:')} ${target.path.join(' → ')}`);
+            if (target.derivation === 'asserted') {
+                logger.info(`  ${chalk.yellow('⚠ ASSUMED:')} ${target.formula} ${chalk.gray('(declared as proposition; not derived)')}`);
+            } else if (target.derivation === 'fact') {
+                logger.info(`  ${chalk.green('✅ PROVEN:')} ${target.formula} ${chalk.gray('(matches a resolved fact)')}`);
+            } else {
+                logger.info(`  ${chalk.green('✅ PROVEN:')} ${target.formula}`);
+                if (target.path && target.path.length > 0) {
+                    logger.info(`     ${chalk.gray(`Derivation (${target.path.length} step${target.path.length === 1 ? '' : 's'}):`)}`);
+                    for (let i = 0; i < target.path.length; i += 1) {
+                        const entry = target.path[i];
+                        const premStr = entry.premises.join(', ');
+                        logger.info(`     ${chalk.gray(`  [${i + 1}]`)} ${chalk.cyan(entry.rule)}(${premStr}) ${chalk.gray('→')} ${entry.conclusion}`);
+                    }
+                }
             }
         } else {
             logger.info(`  ${chalk.red('❌ FAILED:')} ${target.formula}`);
@@ -315,15 +366,27 @@ export function displayResults(results, options = {}) {
 function ruleLabel(step) {
     switch (step.origin) {
         case 'AlphaRule':
-            return step.ruleType === 'implies' ? 'alpha-IMPLIES' : 'alpha-AND';
+            return 'alpha-AND';
         case 'BetaRule':
             return 'beta-OR';
         case 'ContrapositionRule':
             return 'contraposition';
         case 'DoubleNegationRule':
             return step.ruleType === 'doubleNegElim' ? 'doubleNeg-elim' : 'doubleNeg-intro';
-        case 'EquivalenceRule':
-            return 'equivalence';
+        case 'ModusPonensRule':
+            return 'modus-ponens';
+        case 'ModusTollensRule':
+            return 'modus-tollens';
+        case 'DisjunctiveModusPonensRule':
+            return 'disj-MP';
+        case 'DisjunctiveSyllogismRule':
+            return 'disj-syll';
+        case 'AndEliminationRule':
+            return step.ruleType === 'andElimR' ? 'andElim-R' : 'andElim-L';
+        case 'OrEliminationRule':
+            return 'orElim';
+        case 'Fact':
+            return 'fact';
         default:
             return step.origin;
     }
@@ -336,7 +399,7 @@ function ruleLabel(step) {
 // @param {Object} [options]
 // @param {string} [options.description] - One-line caption shown under the scenario name.
 // @param {Logger} [options.logger] - Logger to write to. Defaults to a fresh logger.
-// @param {boolean} [options.showRawFormulas=true] - Reserved for a future mnemonic-formula mode.
+// @param {boolean} [options.showRawFormulas=true] - Show raw formula strings in derivation output.
 //
 export function displayStory(results, options = {}) {
     const { description } = options;
@@ -348,6 +411,22 @@ export function displayStory(results, options = {}) {
         enableTimestamps: false,
         enableLabels: false
     });
+
+    if (isAbortedResults(results)) {
+        const scenarioName = results.scenarioPath ? results.scenarioPath.split('/').pop() : '(no scenario)';
+        const bar = chalk.gray('━'.repeat(60));
+        logger.info(`${EOL}${bar}`);
+        logger.info(`  ${chalk.bold('Scenario:')} ${scenarioName}`);
+        if (description) {
+            logger.info(`  ${chalk.gray(description)}`);
+        }
+        logger.info(bar);
+        logger.info(`${EOL}${chalk.red.bold('⛔ SCENARIO ABORTED')}`);
+        logger.info(`  ${chalk.red('Reason:')}   ${results.reason}`);
+        logger.info(`  ${chalk.red('Resolver:')} ${results.resolverName}`);
+        logger.info(`  ${chalk.red('Cause:')}    ${results.cause}${EOL}`);
+        return;
+    }
 
     const {
         system,
@@ -436,9 +515,23 @@ export function displayStory(results, options = {}) {
     } else {
         for (const target of targets) {
             if (target.proven) {
-                const source = identifyProofSource(target, system, results.availableFacts || []);
-                logger.info(`  ${chalk.green('✅ PROVEN ')} ${target.formula}`);
+                const source = derivationLabel(target, system, results.availableFacts || []);
+                if (target.derivation === 'asserted') {
+                    logger.info(`  ${chalk.yellow('⚠ ASSUMED ')} ${target.formula}`);
+                } else {
+                    logger.info(`  ${chalk.green('✅ PROVEN ')} ${target.formula}`);
+                }
                 logger.info(`             ${chalk.gray(source)}`);
+                // For inferred / derived targets, render the actual chain so
+                // consumers can see WHY the target was proven.
+                //
+                if (Array.isArray(target.path) && target.path.length > 0) {
+                    for (let i = 0; i < target.path.length; i += 1) {
+                        const entry = target.path[i];
+                        const premStr = entry.premises.join(', ');
+                        logger.info(`             ${chalk.gray(`[${i + 1}]`)} ${chalk.cyan(entry.rule)}(${premStr}) ${chalk.gray('→')} ${entry.conclusion}`);
+                    }
+                }
             } else {
                 logger.info(`  ${chalk.red('❌ FAILED ')} ${target.formula}`);
                 if (target.missingFacts && target.missingFacts.length > 0) {
@@ -468,46 +561,44 @@ export function displayStory(results, options = {}) {
 
     // Tally
     const provenCount = targets ? targets.filter(t => t.proven).length : 0;
+    const assertedCount = targets ? targets.filter(t => t.proven && t.derivation === 'asserted').length : 0;
+    const inferredCount = provenCount - assertedCount;
     const totalCount = targets ? targets.length : 0;
     const color = provenCount === totalCount ? chalk.green : (provenCount === 0 ? chalk.red : chalk.yellow);
-    logger.info(`${EOL}${chalk.bold('Result:')} ${color(`${provenCount}/${totalCount} targets proven`)}${EOL}`);
+    const breakdown = assertedCount > 0
+        ? `${inferredCount} proven, ${assertedCount} assumed, ${totalCount - provenCount} failed`
+        : `${provenCount}/${totalCount} targets proven`;
+    logger.info(`${EOL}${chalk.bold('Result:')} ${color(breakdown)}${EOL}`);
 }
 
-// Determine where a proof closed: direct fact, a specific step, or proof search.
+// Human-readable label for the engine-provided `derivation` classification.
+// Prefers the structured derivation field over re-deriving from the system.
 //
-function identifyProofSource(target, system, availableFacts) {
-    let normalizedTarget;
-    try {
-        normalizedTarget = normalizeFormula(target.formula);
-    } catch {
-        // If the target won't parse here (it parsed in the engine, but defensive)
-        // fall back to the path-length hint.
-        return target.path?.length > 0
-            ? `via proof search (${target.path.length} steps)`
-            : 'matched directly';
+function derivationLabel(target, system, availableFacts) {
+    if (target.derivation === 'fact') {
+        return 'matches a resolved fact';
     }
-
-    // Fact match (any fact normalizes to the same canonical form).
-    for (const fact of availableFacts) {
+    if (target.derivation === 'asserted') {
+        return 'declared as proposition (not derived)';
+    }
+    if (target.derivation === 'inference') {
+        const depth = target.path?.length || 0;
+        return depth > 0
+            ? `via proof search (${depth} step${depth === 1 ? '' : 's'})`
+            : 'via proof search';
+    }
+    if (target.derivation === 'derived' && system && Array.isArray(system.steps)) {
+        let normalizedTarget;
         try {
-            if (normalizeFormula(fact) === normalizedTarget) {
-                return 'matches a fact directly';
-            }
+            normalizedTarget = normalizeFormula(target.formula);
         } catch {
-            // Skip malformed entries.
+            return 'derived during YAML step execution';
         }
-    }
-
-    // Step match (the formula already appears as a stored step).
-    if (system && Array.isArray(system.steps)) {
         for (let i = 0; i < system.steps.length; i += 1) {
             const step = system.steps[i];
             for (const f of step.formulas) {
                 try {
                     if (normalizeFormula(f) === normalizedTarget) {
-                        if (step.ruleType === 'fact') {
-                            return `declared as proposition (step #${i + 1})`;
-                        }
                         return `derived at step #${i + 1}`;
                     }
                 } catch {
@@ -515,9 +606,7 @@ function identifyProofSource(target, system, availableFacts) {
                 }
             }
         }
+        return 'derived during YAML step execution';
     }
-
-    // Otherwise it came from BFS expansion during searchForProof.
-    const depth = target.path?.length || 0;
-    return depth > 0 ? `via proof search (${depth} step${depth === 1 ? '' : 's'})` : 'matched directly';
+    return 'matched directly';
 }

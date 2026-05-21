@@ -9,7 +9,7 @@ import {
     assertFactResolved,
     assertStepSkipped
 } from '../helpers/test-helpers.js';
-import { validateProof } from '../helpers/validateProof.js';
+import { validateProof, validateReachability } from '../helpers/validateProof.js';
 
 // Integration tests for scenario execution
 //
@@ -29,7 +29,11 @@ test('alpha rule - AND conjunction', async t => {
     validateProof(t, results);
 });
 
-test('alpha rule - IMPLIES implication', async t => {
+test('compound implication proposition + MP derives action atom', async t => {
+    // The YAML declares ((UserWantsEuropeanFlight ∧ UserHasVisa) → ActionA)
+    // as a proposition. The alpha-AND step builds the antecedent from atomic
+    // resolver facts. MP fires automatically during proof search to derive ActionA.
+    //
     const scenarioPath = join(testScenariosPath, 'all-rules.yaml');
     const results = await runGentzenReasoning(scenarioPath, {
         customResolvers: allMockResolvers
@@ -37,6 +41,13 @@ test('alpha rule - IMPLIES implication', async t => {
 
     assertProven(t, 'ActionA', results);
     validateProof(t, results);
+    // Reachability: every premise in the alpha-AND-derived target's chain
+    // must connect to a declared fact, proposition, or earlier derivation.
+    // (Pick a target with a real derivation chain — ActionA itself is a
+    // resolver fact in allMockResolvers, so its path is empty.)
+    //
+    const checked = validateReachability(t, '(UserWantsEuropeanFlight ∧ UserHasVisa)', results);
+    t.true(checked > 0, 'the alpha-AND chain has at least one verifiable premise source');
 });
 
 test('beta rule - OR disjunction', async t => {
@@ -69,7 +80,10 @@ test('double negation - introduction', async t => {
     validateProof(t, results);
 });
 
-test('equivalence rule', async t => {
+test('equivalence as a compound proposition', async t => {
+    // Biconditionals are declared as compound propositions (stipulated rules).
+    // assertProven succeeds via direct proposition match.
+    //
     const scenarioPath = join(testScenariosPath, 'all-rules.yaml');
     const results = await runGentzenReasoning(scenarioPath, {
         customResolvers: allMockResolvers
@@ -176,6 +190,31 @@ test('step execution order', async t => {
     // Check that steps are processed in order
     const stepFormulas = results.system.steps.map(step => [...step.formulas][0]);
     t.true(stepFormulas.length > 0);
+});
+
+test('modus ponens - scenario explicitly applies the rule and derives B', async t => {
+    // The scenario declares A and (A → B) as propositions, then applies
+    // modusPonens explicitly. B is NOT a proposition, so the only path to
+    // its appearance in system.steps is via the MP step.
+    //
+    // - The structural assertions below are load-bearing: if MP is broken,
+    //   loadFromYaml's try/catch silently skips the step and no MP-typed
+    //   step ends up in system.steps. The `mpStep` lookup then fails.
+    // - validateProof recomputes the expected consequent independently and
+    //   fails if MP produced the wrong formula.
+    //
+    const scenarioPath = join(testScenariosPath, 'modus-ponens.yaml');
+    const results = await runGentzenReasoning(scenarioPath, {});
+
+    const mpStep = results.system.steps.find(s => s.ruleType === 'modusPonens');
+    t.truthy(mpStep, 'a modusPonens step should exist');
+    t.is(mpStep.origin, 'ModusPonensRule');
+    t.is([...mpStep.formulas][0], 'B', 'modus ponens should derive B');
+    t.is(mpStep.from.length, 2, 'modus ponens step references two inputs');
+    t.is([...mpStep.from[0].formulas][0], '(A → B)', 'first input is the implication');
+    t.is([...mpStep.from[1].formulas][0], 'A', 'second input is the antecedent');
+
+    validateProof(t, results);
 });
 
 test('onProof callback fires once per target with full event shape', async t => {

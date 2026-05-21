@@ -12,18 +12,40 @@ export function assertProven(t, target, results, message = `Expected target '${t
 
 export function assertNotProven(t, target, results, message = `Expected target '${target}' to not be proven`) {
 	const targetResult = results.targets.find(tr => tr.formula === target);
-	if (targetResult && targetResult.proven) {
-		t.fail(message);
-	} else {
-		t.pass();
+	if (!targetResult) {
+		t.fail(
+			`assertNotProven: target '${target}' is not present in results.targets. ` +
+			`Likely a typo or scenario shape change — the assertion is meaningless when the target is missing.`
+		);
+		return;
 	}
+	if (targetResult.proven) {
+		t.fail(message);
+		return;
+	}
+	t.pass();
 }
 
+// Asserts every fact in expectedMissing is present in results.missingFacts.
+// Extras in results.missingFacts are allowed.
+//
 export function assertMissingFacts(t, expectedMissing, results, message = 'Expected missing facts do not match') {
 	const actualMissing = results.missingFacts || [];
 	for (const fact of expectedMissing) {
 		t.true(actualMissing.includes(fact), `Expected missing fact '${fact}' not found`);
 	}
+}
+
+// Asserts results.missingFacts equals expectedMissing exactly — order ignored,
+// extras forbidden. Use when the test cares that no other facts were missed.
+//
+export function assertExactlyMissingFacts(t, expectedMissing, results) {
+	const actualMissing = results.missingFacts || [];
+	const expectedSorted = [...expectedMissing].sort();
+	const actualSorted = [...actualMissing].sort();
+	t.deepEqual(actualSorted, expectedSorted,
+		`Expected missingFacts exactly ${JSON.stringify(expectedSorted)}, got ${JSON.stringify(actualSorted)}`
+	);
 }
 
 export function assertResolverLoaded(t, resolverName, results, message = `Expected resolver '${resolverName}' to be loaded`) {
@@ -89,11 +111,11 @@ export function assertArrayContains(t, array, item, message = `Expected array to
 }
 
 export function assertArrayNotContains(t, array, item, message = `Expected array to not contain ${item}`) {
-	if (Array.isArray(array)) {
-		t.false(array.includes(item), message);
-	} else {
-		t.pass(); // Not an array, so it doesn't contain the item
+	if (!Array.isArray(array)) {
+		t.fail(`assertArrayNotContains: expected an array, got ${typeof array}`);
+		return;
 	}
+	t.false(array.includes(item), message);
 }
 
 export function assertContains(t, str, substring, message = `Expected string to contain '${substring}'`) {

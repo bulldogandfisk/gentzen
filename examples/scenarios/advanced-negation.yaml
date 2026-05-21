@@ -1,12 +1,13 @@
 # yaml-language-server: $schema=../../schemas/scenario.schema.json
 # Advanced Negation Demo
-# Shows double negation, contraposition, and complex negated formulas
+# Shows double negation, contraposition, and complex negated formulas.
+# Implications are declared as compound propositions so MP can fire.
 
 propositions:
-  - AllowAccess
-  - DenyAccess
-  - RequireAuth
-  - GrantFullPermissions
+  # Business rules only. Action atoms (AllowAccess, GrantFullPermissions)
+  # are derived via MP. DenyAccess and RequireAuth are unused vocabulary.
+  - (UserIsAdmin → AllowAccess)
+  - ((UserIsAdmin ∧ SystemSecure) → GrantFullPermissions)
 
 steps:
   # Step 1: Apply double negation elimination (~~DatabaseConnected -> DatabaseConnected)
@@ -14,36 +15,22 @@ steps:
     subtype: elimination
     from:
       - ~~DatabaseConnected
-      
-  # Step 2: Create implication (UserIsAdmin -> AllowAccess)  
-  - rule: alpha
-    subtype: implies
-    from:
-      - UserIsAdmin
-      - AllowAccess
-      
-  # Step 3: Apply contraposition to get (~AllowAccess -> ~UserIsAdmin)
+
+  # Step 2: Apply contraposition to get (~AllowAccess -> ~UserIsAdmin)
   - rule: contraposition
     from:
       - (UserIsAdmin → AllowAccess)
-      
-  # Step 4: Combine admin status with security
+
+  # Step 3: Combine admin status with security so MP fires on the compound proposition
   - rule: alpha
     subtype: and
     from:
       - UserIsAdmin
       - SystemSecure
-      
-  # Step 5: Admin + Security implies full permissions
-  - rule: alpha
-    subtype: implies
-    from:
-      - (UserIsAdmin ∧ SystemSecure)
-      - GrantFullPermissions
 
 targets:
   - DatabaseConnected                    # From double negation elimination
-  - AllowAccess                         # From admin status
-  - GrantFullPermissions                # From admin + security
-  - (~AllowAccess → ~UserIsAdmin)       # From contraposition
-  - (UserIsAdmin ∧ SystemSecure)        # Conjunction
+  - AllowAccess                          # From MP on (UserIsAdmin → AllowAccess)
+  - GrantFullPermissions                 # From MP on the compound proposition
+  - (~AllowAccess → ~UserIsAdmin)        # From contraposition
+  - (UserIsAdmin ∧ SystemSecure)         # Conjunction

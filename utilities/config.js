@@ -13,11 +13,13 @@ const DEFAULT_CONFIG = {
         enableLabels: true
     },
 
-    // Reasoning engine settings
+    // Reasoning engine settings. Limits bound BFS work; raise if scenarios
+    // with many facts + many propositions saturate them.
+    //
     reasoning: {
         maxProofDepth: 5,
-        maxIterations: 1000,
-        maxQueueSize: 1000,
+        maxIterations: 10000,
+        maxQueueSize: 10000,
         maxSteps: 100
     },
 

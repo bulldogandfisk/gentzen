@@ -294,13 +294,32 @@ test('displayResults - proven target with path display', async t => {
         customResolvers: allMockResolvers
     });
 
-    // Inject a proven target with a non-empty path
+    // Inject a proven target with a non-empty structured path.
     //
     const modifiedResults = {
         ...results,
         targets: [
-            { formula: 'A', proven: true, missingFacts: [], path: ['step_1', 'final_step'] },
-            { formula: 'B', proven: false, missingFacts: ['B'], path: [] }
+            {
+                formula: 'B',
+                proven: true,
+                derivation: 'inference',
+                missingFacts: [],
+                path: [
+                    {
+                        rule: 'modusPonens',
+                        premises: ['(A → B)', 'A'],
+                        conclusion: 'B',
+                        sources: [
+                            { formula: '(A → B)', kind: 'proposition', fromPathIndex: null },
+                            { formula: 'A', kind: 'fact', fromPathIndex: null }
+                        ]
+                    }
+                ]
+            },
+            {
+                formula: 'C', proven: false, derivation: null,
+                missingFacts: ['C'], path: []
+            }
         ]
     };
     t.notThrows(() => {

@@ -65,6 +65,20 @@ const SCENARIOS = [
         target: '((((A ∧ B) ∧ C) ∧ D) ∧ E)',
         depth: 4,
         purpose: 'BFS ceiling — search exhausts a limit before proving'
+    },
+    {
+        name: 'mp-single',
+        props: ['A', '(A → B)'],
+        target: 'B',
+        depth: 1,
+        purpose: 'modus ponens — single application'
+    },
+    {
+        name: 'mp-chain',
+        props: ['A', '(A → B)', '(B → C)'],
+        target: 'C',
+        depth: 2,
+        purpose: 'modus ponens — two-step chain'
     }
 ];
 

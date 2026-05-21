@@ -15,10 +15,76 @@ export interface RunOptions {
     onProof?: OnProofCallback;
 }
 
+/**
+ * How a target was proved (or null if it wasn't):
+ *  - 'fact'      : matches a resolver-produced fact in `availableFacts`.
+ *  - 'asserted'  : matches a proposition declared in the scenario YAML —
+ *                  the scenario stipulates this; it was NOT derived.
+ *                  Consumers gating real-world side effects should refuse
+ *                  to act on `'asserted'` targets and require `'inference'`
+ *                  or `'derived'` instead.
+ *  - 'derived'   : matches a step produced by a rule application during
+ *                  YAML step execution (alpha, beta, contraposition,
+ *                  doubleNegation, modusPonens).
+ *  - 'inference' : derived during the BFS proof search beyond the YAML steps.
+ *  - null        : `proven` is false; no derivation was found.
+ */
+export type ProofDerivation = 'fact' | 'asserted' | 'derived' | 'inference' | null;
+
+/**
+ * Identifier for the rule that fired in a single DerivationStep.
+ */
+export type RuleId =
+    | 'and'
+    | 'or'
+    | 'modusPonens'
+    | 'modusTollens'
+    | 'contraposition'
+    | 'doubleNegIntro'
+    | 'doubleNegElim'
+    | 'andElimL'
+    | 'andElimR'
+    | 'orElim'
+    | 'disjunctiveMP'
+    | 'disjunctiveSyllogism';
+
+/**
+ * Where a single premise of a DerivationStep came from.
+ *  - 'fact'         : a resolver-produced fact in `availableFacts`.
+ *  - 'proposition'  : an axiom declared in the scenario YAML.
+ *  - 'derivation'   : another DerivationStep earlier in the path;
+ *                     `fromPathIndex` points to its index.
+ */
+export interface PremiseSource {
+    formula: string;
+    kind: 'fact' | 'proposition' | 'derivation';
+    /** Index into the surrounding path[] for 'derivation' premises; null for leaves. */
+    fromPathIndex: number | null;
+}
+
+/**
+ * One rule application in a structured derivation chain. Each step lists
+ * its premises (formula strings), the resulting conclusion, and the source
+ * each premise came from. The chain is in dependency order — leaves first,
+ * target last. The target's chain entry is the last element.
+ */
+export interface DerivationStep {
+    rule: RuleId;
+    premises: string[];
+    conclusion: string;
+    sources: PremiseSource[];
+}
+
 export interface ProofEvent {
     target: string;
     proven: boolean;
-    path: string[];
+    derivation: ProofDerivation;
+    /**
+     * Structured derivation chain. Empty for 'fact' and 'asserted' targets
+     * (they have no derivation to walk). Non-empty for 'derived' and
+     * 'inference'.
+     */
+    path: DerivationStep[];
     missingFacts: string[];
     durationMs: number;
 }
@@ -30,8 +96,17 @@ export type ResolverFn = () => boolean | Promise<boolean>;
 export interface TargetResult {
     formula: string;
     proven: boolean;
+    /**
+     * How this target was proved. See {@link ProofDerivation}. Consumers
+     * gating real-world side effects should refuse `'asserted'`.
+     */
+    derivation: ProofDerivation;
     missingFacts: string[];
-    path: string[];
+    /**
+     * Structured derivation chain. Empty for 'fact' and 'asserted' targets.
+     * Non-empty for 'derived' and 'inference'. See {@link DerivationStep}.
+     */
+    path: DerivationStep[];
 }
 
 export type SkipReason = 'missing_fact' | 'unknown_atom' | 'parse_error';
@@ -61,7 +136,17 @@ export interface ResolverError {
 
 export interface ReasoningSummary {
     totalTargets: number;
+    /**
+     * Count of targets where `proven === true`. Includes both inferred and
+     * asserted (stipulated) targets. Use `assertedTargets` to subtract out
+     * the stipulated ones when reasoning about agent safety.
+     */
     provenTargets: number;
+    /**
+     * Count of `proven` targets whose derivation is `'asserted'` — the
+     * scenario declared them as propositions; no inference occurred.
+     */
+    assertedTargets: number;
     availableFacts: number;
     missingFacts: number;
     skippedSteps: number;
@@ -106,10 +191,42 @@ export interface ReasoningResults {
     system: SystemHandle;
 }
 
+/**
+ * Returned when a resolver throws or rejects. The scenario run is cancelled —
+ * the system observed an outage in its sensors and the agent should not act on
+ * incomplete or unreliable data. Callers must check `aborted` before using
+ * fields that only exist on a normal ReasoningResults.
+ */
+export interface AbortedResults {
+    aborted: true;
+    reason: 'resolver_error';
+    resolverName: string;
+    cause: string;
+    scenarioPath: string;
+}
+
+/**
+ * Type guard: true when the run was aborted (e.g. a resolver threw).
+ */
+export function isAbortedResults(
+    results: ReasoningResults | AbortedResults
+): results is AbortedResults;
+
+/**
+ * Thrown by `runFactResolvers` when a resolver fails. Surfaces through
+ * `runGentzenReasoning` as an `AbortedResults` return value, not a thrown
+ * error — callers handle abort uniformly with normal results.
+ */
+export class ScenarioAbortedError extends Error {
+    resolverName: string;
+    cause: unknown;
+    constructor(resolverName: string, cause: unknown);
+}
+
 export function runGentzenReasoning(
     scenarioPath: string,
     options?: RunOptions
-): Promise<ReasoningResults>;
+): Promise<ReasoningResults | AbortedResults>;
 
 export interface DisplayOptions {
     verbose?: boolean;
@@ -123,7 +240,7 @@ export interface DisplayStoryOptions {
     description?: string;
     /** Logger to write to. Defaults to a fresh logger derived from config. */
     logger?: unknown;
-    /** Reserved for a future mnemonic-formula display mode. Default true. */
+    /** Show raw formula strings in derivation output. Default true. */
     showRawFormulas?: boolean;
 }
 

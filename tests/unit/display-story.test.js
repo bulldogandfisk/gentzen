@@ -51,25 +51,63 @@ test('displayStory - prints all five sections with header and tally', async t =>
     t.true(all.includes('Result:'), 'tally line');
 });
 
-test('displayStory - proposition match labelled distinctly from derived match', async t => {
-    const results = await runGentzenReasoning(
-        join(testScenariosPath, 'all-rules.yaml'),
-        { customResolvers: allMockResolvers }
-    );
+test('displayStory - distinguishes ASSUMED proposition from DERIVED rule output', t => {
+    // Stub result where we know exactly which target should get which label:
+    //
+    //   - 'Foo' is a proposition target (derivation: 'asserted')
+    //     → must render as ⚠ ASSUMED with "declared as proposition" label.
+    //   - '(A ∧ B)' is a derived alpha-AND step (derivation: 'derived')
+    //     → must render as ✅ PROVEN with "derived at step #N" label.
+    //
+    const propA = { origin: 'Proposition', ruleType: 'fact', from: [], formulas: new Set(['A']) };
+    const propB = { origin: 'Proposition', ruleType: 'fact', from: [], formulas: new Set(['B']) };
+    const propFoo = { origin: 'Proposition', ruleType: 'fact', from: [], formulas: new Set(['Foo']) };
+    const andStep = {
+        origin: 'AlphaRule',
+        ruleType: 'and',
+        from: [propA, propB],
+        formulas: new Set(['(A ∧ B)'])
+    };
+
+    const stubResults = {
+        scenarioPath: '/tmp/synthetic.yaml',
+        propositions: ['A', 'B', 'Foo'],
+        targets: [
+            { formula: 'Foo', proven: true, derivation: 'asserted', missingFacts: [], path: [] },
+            { formula: '(A ∧ B)', proven: true, derivation: 'derived', missingFacts: [], path: [] }
+        ],
+        summary: {
+            totalTargets: 2, provenTargets: 2, assertedTargets: 1,
+            availableFacts: 0, missingFacts: 0, skippedSteps: 0,
+            loadedFiles: [], totalResolvers: 0
+        },
+        availableFacts: [],
+        missingFacts: [],
+        skippedSteps: [],
+        factResolutions: {},
+        resolverErrors: [],
+        verboseInfo: null,
+        system: { steps: [propFoo, andStep, propA, propB], facts: new Set() }
+    };
 
     const { lines, logger } = captureLogger();
-    displayStory(results, { logger });
-    const all = lines.join('\n');
+    displayStory(stubResults, { logger });
 
-    // At least one target in this scenario is a proposition name, so the
-    // "declared as proposition" label should appear if any proposition is
-    // among the targets — assert the function emits the right phrase when
-    // applicable. We accept either label appearing because the scenario shape
-    // determines which one fires.
-    //
+    const fooIdx = lines.findIndex(l => l.includes('Foo') && l.includes('ASSUMED'));
+    const andIdx = lines.findIndex(l => l.includes('(A ∧ B)') && l.includes('PROVEN'));
+    t.true(fooIdx >= 0, 'Foo should render as ⚠ ASSUMED, not ✅ PROVEN');
+    t.true(andIdx >= 0, '(A ∧ B) should render as ✅ PROVEN');
+
+    const fooLabel = lines[fooIdx + 1] || '';
+    const andLabel = lines[andIdx + 1] || '';
+
     t.true(
-        all.includes('declared as proposition') || all.includes('derived at step') || all.includes('via proof search'),
-        'at least one proven-source label is present'
+        fooLabel.includes('declared as proposition'),
+        `Foo should be labelled "declared as proposition", got: ${fooLabel}`
+    );
+    t.true(
+        andLabel.includes('derived at step'),
+        `(A ∧ B) should be labelled "derived at step", got: ${andLabel}`
     );
 });
 

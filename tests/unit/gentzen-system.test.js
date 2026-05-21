@@ -201,15 +201,17 @@ test('alphaRule - and produces conjunction', t => {
     t.is(formula, '(A ∧ B)');
 });
 
-test('alphaRule - implies produces implication', t => {
+test('alphaRule - implies subtype is rejected', t => {
+    // Implication introduction is not a sound rule without conditional proof.
+    // Declare implications as compound propositions instead.
+    //
     const system = new GentzenSystem();
     const step1 = system.addProposition('A');
     const step2 = system.addProposition('B');
 
-    const result = system.alphaRule(step1, step2, 'implies');
-    const formula = [...result.formulas][0];
-
-    t.is(formula, '(A → B)');
+    t.throws(() => {
+        system.alphaRule(step1, step2, 'implies');
+    }, { message: /unsupported subtype/ });
 });
 
 test('alphaRule - unknown subtype throws', t => {
@@ -219,7 +221,7 @@ test('alphaRule - unknown subtype throws', t => {
 
     t.throws(() => {
         system.alphaRule(step1, step2, 'unknown');
-    }, { message: /Unknown subtype/ });
+    }, { message: /unsupported subtype/ });
 });
 
 // betaRule
@@ -242,15 +244,13 @@ test('betaRule - produces disjunction', t => {
 
 test('contrapositionRule - on implication produces contrapositive', t => {
     const system = new GentzenSystem();
-    const step1 = system.addProposition('A');
-    const step2 = system.addProposition('B');
-    const implStep = system.alphaRule(step1, step2, 'implies');
+    const implStep = system.addProposition('(A → B)');
 
     const result = system.contrapositionRule(implStep);
     const formula = [...result.formulas][0];
 
     t.is(result.origin, 'ContrapositionRule');
-    t.true(formula.includes('~'));
+    t.is(formula, '(~B → ~A)');
 });
 
 test('contrapositionRule - on non-implication throws', t => {
@@ -309,19 +309,13 @@ test('doubleNegationRule - elimination on plain formula keeps it', t => {
     t.is(formula, 'A');
 });
 
-// equivalenceRule
+// equivalenceRule was removed: it synthesized A ↔ B from any two formulas,
+// which is unsound. Declare biconditionals as compound propositions instead.
 //
 
-test('equivalenceRule - produces biconditional', t => {
+test('equivalenceRule is no longer exposed', t => {
     const system = new GentzenSystem();
-    const step1 = system.addProposition('A');
-    const step2 = system.addProposition('B');
-
-    const result = system.equivalenceRule(step1, step2);
-    const formula = [...result.formulas][0];
-
-    t.is(result.origin, 'EquivalenceRule');
-    t.is(formula, '(A ↔ B)');
+    t.is(typeof system.equivalenceRule, 'undefined');
 });
 
 // expandOneLevel

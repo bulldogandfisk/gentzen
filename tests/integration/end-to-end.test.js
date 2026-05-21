@@ -2,11 +2,12 @@ import { join } from 'node:path';
 import test from 'ava';
 import { runGentzenReasoning, displayResults } from '../../main.js';
 import { allMockResolvers } from '../scenarios/test-resolvers/mockResolvers.js';
-import { 
-    assertScenarioStructure, 
-    assertResolverLoaded, 
-    assertProven 
+import {
+    assertScenarioStructure,
+    assertResolverLoaded,
+    assertProven
 } from '../helpers/test-helpers.js';
+import { validateProof } from '../helpers/validateProof.js';
 
 // End-to-end workflow tests.
 //
@@ -27,10 +28,12 @@ test('travel booking workflow - complete scenario', async t => {
     t.true(results.targets.length >= 8); // scenario-no-facts has 8 targets
     t.true(results.summary.provenTargets > 0);
     assertResolverLoaded(t, 'travel', results);
-    
+
     // Check for key travel-related targets
     const targetFormulas = results.targets.map(t => t.formula);
     t.true(targetFormulas.some(f => f.includes('European')));
+
+    validateProof(t, results);
 });
 
 test('system monitoring workflow', async t => {
@@ -49,6 +52,7 @@ test('system monitoring workflow', async t => {
     assertScenarioStructure(t, results);
     assertProven(t, '(SystemHealthy ∧ DatabaseConnected)', results);
     assertProven(t, '((SystemHealthy ∧ DatabaseConnected) → SystemAlert)', results);
+    validateProof(t, results);
 });
 
 test('mixed business and system workflow', async t => {
@@ -100,11 +104,13 @@ test('all rule types integration', async t => {
     const steps = results.system.steps;
     const ruleTypes = steps.map(step => step.ruleType);
     
-    t.true(ruleTypes.includes('and') || ruleTypes.includes('implies')); // alpha rules
+    t.true(ruleTypes.includes('and')); // alpha-AND
     t.true(ruleTypes.includes('or')); // beta rules
     t.true(ruleTypes.includes('contraposition'));
     t.true(ruleTypes.includes('doubleNegIntro') || ruleTypes.includes('doubleNegElim')); // double negation
-    t.true(ruleTypes.includes('equiv')); // equivalence
+    t.true(ruleTypes.includes('modusPonens')); // MP fires on the compound implication propositions
+
+    validateProof(t, results);
 });
 
 test('performance with large scenario', async t => {
@@ -123,20 +129,19 @@ test('performance with large scenario', async t => {
     t.true(results.targets.length > 0);
 });
 
-test('regression test - existing demo scenarios', async t => {
-    // Test that all existing demo functionality still works
+test('shipped demo scenarios run successfully', async t => {
     const scenarios = [
         'mixed-scenario.yaml',
         'system-scenario.yaml',
         'scenario-no-facts.yaml'
     ];
-    
+
     for (const scenario of scenarios) {
         const scenarioPath = join(mainScenariosPath, scenario);
         const results = await runGentzenReasoning(scenarioPath, {
             resolversPath: mainResolversPath
         });
-        
+
         assertScenarioStructure(t, results);
         t.true(results.targets.length > 0, `No targets in ${scenario}`);
     }
@@ -221,20 +226,19 @@ test('complete workflow with all options', async t => {
     t.is(results.factResolutions.AnotherWorkflowFact, false);
 });
 
-test('backward compatibility test', async t => {
-    // Test that the old demo scripts would still work
+test('common invocation shapes work', async t => {
     const scenarioPath = join(mainScenariosPath, 'mixed-scenario.yaml');
-    
-    // Test without any options (like the old test-pure-reasoning.js)
+
+    // No options.
     const results1 = await runGentzenReasoning(scenarioPath);
     assertScenarioStructure(t, results1);
-    
-    // Test with verbose (like the old test-function-call.js)
+
+    // verbose: true populates verboseInfo.
     const results2 = await runGentzenReasoning(scenarioPath, { verbose: true });
     assertScenarioStructure(t, results2);
     t.true(results2.verboseInfo !== null);
-    
-    // Test with custom path (like the old test-custom-paths.js)
+
+    // Custom scenario + custom resolvers path.
     const customScenario = join(demoCustomPath, 'my-scenarios/simple-test.yaml');
     const results3 = await runGentzenReasoning(customScenario, {
         resolversPath: join(demoCustomPath, 'my-resolvers')

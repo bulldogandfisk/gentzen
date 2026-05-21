@@ -144,28 +144,52 @@ export function astEquals(ast1, ast2) {
     }
 }
 
-// Apply logical normalization transformations
+// Apply logical normalization transformations.
+//
+// Two normalizations are applied recursively:
+//   1. Double negation elimination: ~~A → A.
+//   2. Commutativity canonicalization for ∧, ∨, ↔: sort operands by their
+//      canonical string form so that (B ∧ A) and (A ∧ B) produce the same
+//      normalized output. Implication (→) is NOT commutative and is left
+//      in declared order.
+//
+// Associativity is NOT canonicalized: ((A ∧ B) ∧ C) and (A ∧ (B ∧ C))
+// remain distinct after this pass.
+//
 export function normalizeAST(ast) {
     if (!ast) return ast;
-    
+
     switch (ast.type) {
         case ASTNodeType.ATOM:
-            return ast; // Atoms don't need normalization
-            
+            return ast;
+
         case ASTNodeType.UNARY:
-            // Double negation elimination: ~~A → A
-            if (ast.operator === OperatorType.NOT && 
-                ast.operand.type === ASTNodeType.UNARY && 
+            // Double negation elimination: ~~A → A.
+            //
+            if (ast.operator === OperatorType.NOT &&
+                ast.operand.type === ASTNodeType.UNARY &&
                 ast.operand.operator === OperatorType.NOT) {
                 return normalizeAST(ast.operand.operand);
             }
             return new UnaryNode(ast.operator, normalizeAST(ast.operand));
-            
-        case ASTNodeType.BINARY:
+
+        case ASTNodeType.BINARY: {
             const left = normalizeAST(ast.left);
             const right = normalizeAST(ast.right);
+            if (ast.operator === OperatorType.AND ||
+                ast.operator === OperatorType.OR ||
+                ast.operator === OperatorType.IFF) {
+                // Sort operands by canonical-string form. Stable, deterministic.
+                //
+                const ls = astToString(left);
+                const rs = astToString(right);
+                if (rs.localeCompare(ls) < 0) {
+                    return new BinaryNode(ast.operator, right, left);
+                }
+            }
             return new BinaryNode(ast.operator, left, right);
-            
+        }
+
         default:
             return ast;
     }

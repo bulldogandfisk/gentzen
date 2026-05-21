@@ -3,6 +3,7 @@ import { runGentzenReasoning } from '../../main.js';
 import { join } from 'node:path';
 import fs from 'fs-extra';
 import os from 'node:os';
+import { validateProof } from '../helpers/validateProof.js';
 
 // Helper to create temporary scenario files for testing
 //
@@ -36,9 +37,13 @@ test('AND operator aliases - all forms work in scenarios', async t => {
     ];
 
     for (const alias of aliases) {
+        // Result is NOT declared as a proposition — that way its proof can
+        // only come from the BFS firing MP on the compound proposition,
+        // which gives derivation === 'inference'.
+        //
         const scenarioContent = `
 propositions:
-  - Result
+  - ((UserLoggedIn ${alias.operator} SystemHealthy) → Result)
 
 steps:
   - rule: alpha
@@ -47,19 +52,13 @@ steps:
       - UserLoggedIn
       - SystemHealthy
 
-  - rule: alpha
-    subtype: implies
-    from:
-      - (UserLoggedIn ${alias.operator} SystemHealthy)
-      - Result
-
 targets:
   - (UserLoggedIn ${alias.operator} SystemHealthy)
   - Result
 `;
 
         const { scenarioPath, tempDir } = await createTempScenario(scenarioContent);
-        
+
         try {
             const results = await runGentzenReasoning(scenarioPath, {
                 customResolvers: testResolvers
@@ -67,7 +66,10 @@ targets:
 
             t.is(results.summary.provenTargets, 2, `${alias.name} should prove both targets`);
             t.true(results.targets[0].proven, `${alias.name} conjunction should be proven`);
-            t.true(results.targets[1].proven, `${alias.name} result should be proven`);
+            t.true(results.targets[1].proven, `${alias.name} result should be proven (via MP)`);
+            t.is(results.targets[1].derivation, 'inference',
+                `${alias.name} Result should be derived via MP, not asserted`);
+            validateProof(t, results);
         } catch (error) {
             t.fail(`${alias.name} failed: ${error.message}`);
         } finally {
@@ -107,6 +109,7 @@ targets:
 
             t.is(results.summary.provenTargets, 1, `${alias.name} should prove target`);
             t.true(results.targets[0].proven, `${alias.name} disjunction should be proven`);
+            validateProof(t, results);
         } catch (error) {
             t.fail(`${alias.name} failed: ${error.message}`);
         } finally {
@@ -115,7 +118,10 @@ targets:
     }
 });
 
-test('IMPLIES operator aliases - all forms work in scenarios', async t => {
+test('IMPLIES operator aliases - all forms parse to canonical implication', async t => {
+    // Verifies parser normalizes each operator alias to → so a target written
+    // with any alias matches a proposition declared with any other alias.
+    //
     const aliases = [
         { name: 'Unicode →', operator: '→' },
         { name: 'Keyword IMPLIES', operator: 'IMPLIES' },
@@ -125,21 +131,14 @@ test('IMPLIES operator aliases - all forms work in scenarios', async t => {
     for (const alias of aliases) {
         const scenarioContent = `
 propositions:
-  - Result
-
-steps:
-  - rule: alpha
-    subtype: implies
-    from:
-      - UserLoggedIn
-      - Result
+  - (UserLoggedIn ${alias.operator} Result)
 
 targets:
-  - (UserLoggedIn ${alias.operator} Result)
+  - (UserLoggedIn → Result)
 `;
 
         const { scenarioPath, tempDir } = await createTempScenario(scenarioContent);
-        
+
         try {
             const results = await runGentzenReasoning(scenarioPath, {
                 customResolvers: testResolvers
@@ -147,6 +146,7 @@ targets:
 
             t.is(results.summary.provenTargets, 1, `${alias.name} should prove target`);
             t.true(results.targets[0].proven, `${alias.name} implication should be proven`);
+            validateProof(t, results);
         } catch (error) {
             t.fail(`${alias.name} failed: ${error.message}`);
         } finally {
@@ -155,7 +155,7 @@ targets:
     }
 });
 
-test('EQUIVALENCE operator aliases - all forms work in scenarios', async t => {
+test('EQUIVALENCE operator aliases - all forms parse to canonical biconditional', async t => {
     const aliases = [
         { name: 'Unicode ↔', operator: '↔' },
         { name: 'Keyword IFF', operator: 'IFF' },
@@ -165,20 +165,14 @@ test('EQUIVALENCE operator aliases - all forms work in scenarios', async t => {
     for (const alias of aliases) {
         const scenarioContent = `
 propositions:
-  - Result
-
-steps:
-  - rule: equivalence
-    from:
-      - UserLoggedIn
-      - SystemHealthy
+  - (UserLoggedIn ${alias.operator} SystemHealthy)
 
 targets:
-  - (UserLoggedIn ${alias.operator} SystemHealthy)
+  - (UserLoggedIn ↔ SystemHealthy)
 `;
 
         const { scenarioPath, tempDir } = await createTempScenario(scenarioContent);
-        
+
         try {
             const results = await runGentzenReasoning(scenarioPath, {
                 customResolvers: testResolvers
@@ -186,6 +180,7 @@ targets:
 
             t.is(results.summary.provenTargets, 1, `${alias.name} should prove target`);
             t.true(results.targets[0].proven, `${alias.name} equivalence should be proven`);
+            validateProof(t, results);
         } catch (error) {
             t.fail(`${alias.name} failed: ${error.message}`);
         } finally {
@@ -198,6 +193,8 @@ test('Mixed operator aliases in complex formula', async t => {
     const scenarioContent = `
 propositions:
   - AgentCanRun
+  # Implication stipulated as a proposition; MP fires automatically when the antecedent is derived.
+  - ((((UserLoggedIn AND HasPermission) ∧ ~MaintenanceMode) OR ~EmergencyMode) → AgentCanRun)
 
 steps:
   # Build complex condition using different aliases
@@ -219,13 +216,6 @@ steps:
       - ((UserLoggedIn AND HasPermission) ∧ ~MaintenanceMode)
       - ~EmergencyMode
 
-  # Create implication with different alias  
-  - rule: alpha
-    subtype: implies
-    from:
-      - (((UserLoggedIn AND HasPermission) ∧ ~MaintenanceMode) OR ~EmergencyMode)
-      - AgentCanRun
-
 targets:
   - (UserLoggedIn AND HasPermission)
   - ((UserLoggedIn AND HasPermission) ∧ ~MaintenanceMode)
@@ -244,6 +234,7 @@ targets:
         results.targets.forEach((target, i) => {
             t.true(target.proven, `Target ${i + 1} with mixed aliases should be proven: ${target.formula}`);
         });
+        validateProof(t, results);
     } catch (error) {
         t.fail(`Mixed aliases failed: ${error.message}`);
     } finally {
@@ -255,16 +246,10 @@ test('Contraposition with operator aliases', async t => {
     const scenarioContent = `
 propositions:
   - ActionAllowed
+  - (UserLoggedIn IMPLIES ActionAllowed)
 
 steps:
-  # Create implication using keyword alias
-  - rule: alpha
-    subtype: implies
-    from:
-      - UserLoggedIn
-      - ActionAllowed
-
-  # Apply contraposition to the keyword-based implication
+  # Apply contraposition to the keyword-aliased proposition
   - rule: contraposition
     from:
       - (UserLoggedIn IMPLIES ActionAllowed)
@@ -284,6 +269,7 @@ targets:
         t.is(results.summary.provenTargets, 2, 'Both contraposition targets should be proven');
         t.true(results.targets[0].proven, 'Original implication should be proven');
         t.true(results.targets[1].proven, 'Contrapositive should be proven');
+        validateProof(t, results);
     } catch (error) {
         t.fail(`Contraposition with aliases failed: ${error.message}`);
     } finally {
@@ -292,11 +278,14 @@ targets:
 });
 
 test('Agent authorization scenario with readable aliases', async t => {
-    // This tests the real-world use case: agent pre-condition validation using readable operators
+    // Real-world use case: agent pre-condition validation. Authorization rule is
+    // stipulated as a compound proposition; alpha-AND lifts atomic facts into
+    // the compound antecedent; MP fires automatically.
     const scenarioContent = `
 propositions:
   - AgentAuthorized
   - SafeToRun
+  - (((UserLoggedIn AND SystemHealthy) AND (~MaintenanceMode AND ~EmergencyMode)) → AgentAuthorized)
 
 steps:
   # User authentication and system health check
@@ -306,30 +295,23 @@ steps:
       - UserLoggedIn
       - SystemHealthy
 
-  # System safety check  
+  # System safety check
   - rule: alpha
     subtype: and
     from:
       - ~MaintenanceMode
       - ~EmergencyMode
 
-  # Combined safety condition
+  # Combined safety condition - matches the proposition's antecedent
   - rule: alpha
     subtype: and
     from:
       - (UserLoggedIn AND SystemHealthy)
       - (~MaintenanceMode AND ~EmergencyMode)
 
-  # Authorization rule: if all conditions met, agent is authorized
-  - rule: alpha
-    subtype: implies
-    from:
-      - ((UserLoggedIn AND SystemHealthy) AND (~MaintenanceMode AND ~EmergencyMode))
-      - AgentAuthorized
-
 targets:
   - (UserLoggedIn AND SystemHealthy)
-  - (~MaintenanceMode AND ~EmergencyMode)  
+  - (~MaintenanceMode AND ~EmergencyMode)
   - ((UserLoggedIn AND SystemHealthy) AND (~MaintenanceMode AND ~EmergencyMode))
   - AgentAuthorized
 `;
@@ -343,11 +325,12 @@ targets:
 
         t.is(results.summary.provenTargets, 4, 'All agent authorization conditions should be proven');
         t.true(results.targets[3].proven, 'Agent should be authorized when all conditions are met');
-        
+
         // Verify no missing facts - this is critical for agent systems
         results.targets.forEach(target => {
             t.is(target.missingFacts.length, 0, `No missing facts for: ${target.formula}`);
         });
+        validateProof(t, results);
     } catch (error) {
         t.fail(`Agent authorization scenario failed: ${error.message}`);
     } finally {

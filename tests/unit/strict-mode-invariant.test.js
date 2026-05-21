@@ -35,13 +35,13 @@ test.serial('strictMode on - every rule passes the invariant', t => {
     updateConfig({ validation: { strictMode: true } });
 
     const { system, propA, propB } = setupBaseSystem();
+    const implProp = system.addProposition('(A → B)');
 
-    const alphaAnd = system.alphaRule(propA, propB, 'and');
-    const alphaImplies = system.alphaRule(propA, propB, 'implies');
-    const beta = system.betaRule(propA, propB);
-    system.equivalenceRule(propA, propB);
+    system.alphaRule(propA, propB, 'and');
+    system.betaRule(propA, propB);
     system.doubleNegationRule(propA, 'introduction');
-    system.contrapositionRule(alphaImplies);
+    system.contrapositionRule(implProp);
+    system.modusPonensRule(implProp, propA);
 
     // No throw above means invariant held after every rule application.
     t.true(system.steps.length > 3);
