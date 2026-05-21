@@ -1,36 +1,26 @@
-import { runGentzenReasoning, displayResults } from '../main.js';
 import { join } from 'node:path';
+import { runGentzenReasoning, displayStory } from '../main.js';
+import { updateConfig } from '../utilities/config.js';
+import { LogLevel } from '../utilities/logger.js';
+
+updateConfig({ logging: { level: LogLevel.WARN } });
 
 const WD = import.meta.dirname;
 
-console.log('🧪 Testing advanced negation: double negation & contraposition...\n');
+// Exercises double-negation elimination (~~A → A) and contraposition
+// ((A → B) → (~B → ~A)) on a scenario with negated facts and implications.
+//
+const customResolvers = {
+    UserIsAdmin: () => true,
+    SystemSecure: () => true,
+    DatabaseConnected: () => true
+};
 
-try {
-    // Custom resolvers for advanced negation demo
-    const customResolvers = {
-        UserIsAdmin: () => true,
-        SystemSecure: () => true,
-        DatabaseConnected: () => true,  // Used for ~~DatabaseConnected in steps
-    };
-    
-    const results = await runGentzenReasoning(
-        join(WD, './scenarios/advanced-negation.yaml'),
-        { 
-            customResolvers,
-            verbose: true 
-        }
-    );
-    
-    console.log('✅ Advanced negation demo completed!');
-    console.log(`📊 Results: ${results.summary.provenTargets}/${results.summary.totalTargets} targets proven`);
-    
-    displayResults(results, { verbose: true });
-    
-    console.log('\n🔍 Negation Examples Demonstrated:');
-    console.log('1. ~~DatabaseConnected → DatabaseConnected (double negation elimination)');
-    console.log('2. (UserIsAdmin → AllowAccess) → (~AllowAccess → ~UserIsAdmin) (contraposition)');
-    console.log('3. Complex formulas with ~ (negation symbol)');
-    
-} catch (error) {
-    console.error('Advanced negation demo failed:', error.message);
-}
+const results = await runGentzenReasoning(
+    join(WD, './scenarios/advanced-negation.yaml'),
+    { customResolvers }
+);
+
+displayStory(results, {
+    description: 'Double negation elimination and contraposition in action.'
+});

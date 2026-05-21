@@ -1,43 +1,30 @@
-import { runGentzenReasoning, displayResults } from '../main.js';
 import { join } from 'node:path';
+import { runGentzenReasoning, displayStory } from '../main.js';
+import { updateConfig } from '../utilities/config.js';
+import { LogLevel } from '../utilities/logger.js';
+
+updateConfig({ logging: { level: LogLevel.WARN } });
 
 const WD = import.meta.dirname;
 
-console.log('🧪 Testing negation handling in Gentzen system...\n');
+// Resolvers that return false are surfaced as `~Atom` in available facts.
+// Here, UserHasPermission=false becomes ~UserHasPermission, which the
+// scenario can then reason over directly.
+//
+const customResolvers = {
+    UserIsLoggedIn: () => true,
+    UserHasPermission: () => false,
+    UserIsGuest: () => true,
+    SecurityCheckPassed: () => true,
+    MaintenanceMode: () => false,
+    SystemIsOffline: () => false
+};
 
-try {
-    // Custom resolvers that provide facts based on system state
-    const customResolvers = {
-        // User state
-        UserIsLoggedIn: () => true,
-        UserHasPermission: () => false,     // Will auto-generate ~UserHasPermission
-        UserIsGuest: () => true,
-        
-        // System state  
-        SecurityCheckPassed: () => true,
-        MaintenanceMode: () => false,       // Will auto-generate ~MaintenanceMode
-        SystemIsOffline: () => false,       // Will auto-generate ~SystemIsOffline
-    };
-    
-    console.log('📋 Custom resolvers and their values:');
-    Object.entries(customResolvers).forEach(([name, resolver]) => {
-        const result = resolver();
-        console.log(`  ${result ? '✅' : '❌'} ${name}: ${result}`);
-    });
-    
-    const results = await runGentzenReasoning(
-        join(WD, './scenarios/negation-demo.yaml'),
-        { 
-            customResolvers,
-            verbose: true
-        }
-    );
-    
-    console.log('\n✅ Negation demo completed!');
-    console.log(`📊 Results: ${results.summary.provenTargets}/${results.summary.totalTargets} targets proven`);
-    
-    displayResults(results, { verbose: true });
-    
-} catch (error) {
-    console.error('Negation demo failed:', error.message);
-}
+const results = await runGentzenReasoning(
+    join(WD, './scenarios/negation-demo.yaml'),
+    { customResolvers }
+);
+
+displayStory(results, {
+    description: 'Negation and auto-negation: falsy resolvers become ~Atom facts.'
+});

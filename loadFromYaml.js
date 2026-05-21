@@ -82,10 +82,10 @@ export async function loadGentzenScenario(yamlPath, factMap = {}, options = {}) 
             const { rule, subtype, from } = step;
             if (!Array.isArray(from)) { continue; }
 
-            // Check if all required facts are available
+            const skipReasons = [];
             const missingFacts = [];
             const stepObjects = [];
-            
+
             for (const formula of from) {
                 if (system.facts.has(formula)) {
                     stepObjects.push({
@@ -94,38 +94,46 @@ export async function loadGentzenScenario(yamlPath, factMap = {}, options = {}) 
                         from: [],
                         formulas: new Set([formula])
                     });
+                    continue;
+                }
+
+                const foundSteps = system.findStepsContaining(formula);
+                if (foundSteps.length > 0) {
+                    stepObjects.push(foundSteps[0]);
+                    continue;
+                }
+
+                let resolution;
+                try {
+                    resolution = system.canResolveFormula(formula);
+                } catch (parseErr) {
+                    skipReasons.push('parse_error');
+                    logger.debug(`Step #${index + 1}: parse error on "${formula}": ${parseErr.message}`);
+                    continue;
+                }
+
+                if (!resolution.canResolve) {
+                    missingFacts.push(...resolution.missing);
+                    skipReasons.push('missing_fact');
                 } else {
-                    const foundSteps = system.findStepsContaining(formula);
-                    if (foundSteps.length > 0) {
-                        stepObjects.push(foundSteps[0]);
-                    } else {
-                        // Check if it's a missing atomic fact using proper formula resolution
-                        const { canResolve, missing } = system.canResolveFormula(formula);
-                        if (!canResolve) {
-                            missingFacts.push(...missing);
-                        } else {
-                            // Formula structure issue, not just missing facts - expected in some test scenarios
-                            logger.debug(`Step #${index + 1}: Cannot resolve formula "${formula}"`);
-                        }
-                    }
+                    skipReasons.push('unknown_atom');
+                    logger.debug(`Step #${index + 1}: formula "${formula}" has no matching fact or step`);
                 }
             }
 
-            // If we have missing facts, track them and skip this step
-            if (missingFacts.length > 0) {
+            if (skipReasons.length > 0 || stepObjects.length !== from.length) {
+                const reason = skipReasons.includes('parse_error') ? 'parse_error'
+                    : skipReasons.includes('unknown_atom') ? 'unknown_atom'
+                    : 'missing_fact';
                 system.skippedSteps.push({
                     stepIndex: index + 1,
                     rule,
                     subtype,
                     from,
-                    missingFacts
+                    missingFacts,
+                    reason
                 });
                 missingFacts.forEach(fact => system.trackMissingFact(fact));
-                continue;
-            }
-
-            // Only proceed if we have all required step objects
-            if (stepObjects.length !== from.length) {
                 continue;
             }
 
@@ -225,9 +233,3 @@ export async function runFactResolvers(factResolvers) {
     return factMap;
 }
 
-// Create a scenario template without hardcoded facts
-export function createScenarioTemplate(scenario) {
-    const template = { ...scenario };
-    delete template.facts; // Remove hardcoded facts
-    return template;
-}

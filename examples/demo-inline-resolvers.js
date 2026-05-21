@@ -1,71 +1,37 @@
-import { runGentzenReasoning, displayResults } from '../main.js';
 import { join } from 'node:path';
+import { runGentzenReasoning, displayStory } from '../main.js';
+import { updateConfig } from '../utilities/config.js';
+import { LogLevel } from '../utilities/logger.js';
+
+updateConfig({ logging: { level: LogLevel.WARN } });
 
 const WD = import.meta.dirname;
 
-console.log('🧪 Testing inline custom resolvers...\n');
+// Resolvers passed inline via options.customResolvers. No disk discovery,
+// no resolversPath needed. Each value can be a function or a boolean-coercible value.
+//
+const customResolvers = {
+    IsBusinessDay: () => {
+        const dayOfWeek = new Date().getDay();
+        return dayOfWeek >= 1 && dayOfWeek <= 5;
+    },
+    IsWorkingHours: () => {
+        const hour = new Date().getHours();
+        return hour >= 9 && hour <= 17;
+    },
+    DatabaseConnected: () => true,
+    ServicesHealthy: () => true,
+    ShouldProcessPayments: () =>
+        customResolvers.IsBusinessDay() &&
+        customResolvers.IsWorkingHours() &&
+        customResolvers.ServicesHealthy()
+};
 
-try {
-    // Define custom resolvers inline
-    const customResolvers = {
-        // Business logic resolvers
-        IsBusinessDay: () => {
-            const today = new Date();
-            const dayOfWeek = today.getDay();
-            return dayOfWeek >= 1 && dayOfWeek <= 5; // Monday to Friday
-        },
-        
-        IsWorkingHours: () => {
-            const now = new Date();
-            const hour = now.getHours();
-            return hour >= 9 && hour <= 17; // 9 AM to 5 PM
-        },
-        
-        // System status resolvers
-        DatabaseConnected: () => true, // Mock: assume connected
-        ServicesHealthy: () => true,    // Mock: assume healthy
-        
-        // Dynamic fact resolver
-        CurrentTemperature: () => 22,   // Mock: 22°C
-        
-        // Complex logic resolver
-        ShouldProcessPayments: () => {
-            const isBusinessDay = customResolvers.IsBusinessDay();
-            const isWorkingHours = customResolvers.IsWorkingHours();
-            const servicesHealthy = customResolvers.ServicesHealthy();
-            return isBusinessDay && isWorkingHours && servicesHealthy;
-        }
-    };
-    
-    console.log('📋 Custom resolvers defined:');
-    Object.keys(customResolvers).forEach(name => {
-        console.log(`  - ${name}`);
-    });
-    
-    const results = await runGentzenReasoning(
-        join(WD, './scenarios/mixed-scenario.yaml'),
-        { 
-            customResolvers,
-            verbose: true
-        }
-    );
-    
-    console.log('\n✅ Reasoning completed with inline resolvers!');
-    console.log(`📊 Results: ${results.summary.provenTargets}/${results.summary.totalTargets} targets proven`);
-    
-    displayResults(results, { verbose: true });
-    
-    console.log('\n🔍 Resolver Analysis:');
-    console.log('Custom resolver results:');
-    Object.entries(customResolvers).forEach(([name, resolver]) => {
-        try {
-            const result = resolver();
-            console.log(`  ✅ ${name}: ${result}`);
-        } catch (error) {
-            console.log(`  ❌ ${name}: Error - ${error.message}`);
-        }
-    });
-    
-} catch (error) {
-    console.error('Test failed:', error.message);
-}
+const results = await runGentzenReasoning(
+    join(WD, './scenarios/mixed-scenario.yaml'),
+    { customResolvers }
+);
+
+displayStory(results, {
+    description: 'Resolvers supplied inline via options.customResolvers (no disk discovery).'
+});

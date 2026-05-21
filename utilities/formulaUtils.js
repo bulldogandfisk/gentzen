@@ -2,9 +2,10 @@ import { parseFormulaFromString } from './formulaParser.js';
 import { normalizeAST, astToString as astToStringImpl, getAtoms } from './formulaAST.js';
 import { getConfigSection } from './config.js';
 
-// LRU-style cache for parsed formula results.
+// LRU cache for normalized formula results.
 // Avoids re-parsing identical formula strings in hot paths
-// like isProved() and findStepsContaining().
+// like isProved() and findStepsContaining(). Map preserves insertion
+// order; on a hit we re-insert the entry to mark it most-recent.
 //
 const _normalizeCache = new Map();
 
@@ -13,22 +14,22 @@ function getCacheLimit() {
     return config.cacheSize || 1000;
 }
 
-// Normalize a formula string using AST parsing (cached)
+// Normalize a formula string using AST parsing (cached).
 //
 export function normalizeFormula(formula) {
     const cached = _normalizeCache.get(formula);
     if (cached !== undefined) {
+        _normalizeCache.delete(formula);
+        _normalizeCache.set(formula, cached);
         return cached;
     }
     const ast = parseFormulaFromString(formula);
     const normalized = normalizeAST(ast);
     const result = astToStringImpl(normalized);
 
-    // Evict oldest entry if at capacity
-    //
     if (_normalizeCache.size >= getCacheLimit()) {
-        const firstKey = _normalizeCache.keys().next().value;
-        _normalizeCache.delete(firstKey);
+        const oldestKey = _normalizeCache.keys().next().value;
+        _normalizeCache.delete(oldestKey);
     }
     _normalizeCache.set(formula, result);
     return result;

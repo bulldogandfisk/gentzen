@@ -5,7 +5,7 @@
   "description": "Formal reasoning for agents",
   "type": "module",
   "engines": {
-    "node": ">=22.x"
+    "node": ">=24.x"
   },
   "repository": {
     "type": "git",
@@ -29,11 +29,14 @@
     "test:performance": "ava tests/performance/**/*.test.js",
     "test:examples": "node examples/run-all-examples.js",
     "test:watch": "ava --watch",
-    "test:coverage": "c8 ava"
+    "test:coverage": "c8 ava",
+    "bench": "node benchmarks/proof-search.js"
   },
   "c8": {
     "all": true,
-    "src": ["."],
+    "src": [
+      "."
+    ],
     "include": [
       "main.js",
       "gentzen.js",
@@ -49,13 +52,30 @@
       "node_modules/**",
       "ava.config.js"
     ],
-    "reporter": ["text", "html"],
-    "check-coverage": false
+    "reporter": [
+      "text",
+      "html"
+    ],
+    "check-coverage": true,
+    "lines": 95,
+    "statements": 95,
+    "functions": 95,
+    "branches": 88
   },
+  "types": "./index.d.ts",
   "exports": {
-    ".": "./main.js",
-    "./validator": "./validator.js",
-    "./config": "./utilities/config.js"
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./main.js"
+    },
+    "./validator": {
+      "types": "./validator.d.ts",
+      "default": "./validator.js"
+    },
+    "./config": {
+      "types": "./utilities/config.d.ts",
+      "default": "./utilities/config.js"
+    }
   },
   "dependencies": {
     "chalk": "^5.6.0",
@@ -65,7 +85,8 @@
   },
   "devDependencies": {
     "ava": "^6.4.1",
-    "c8": "^11.0.0"
+    "c8": "^11.0.0",
+    "fast-check": "^4.8.0"
   },
   "packageManager": "yarn@4.5.3"
 }

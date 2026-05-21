@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../../schemas/scenario.schema.json
 # Advanced Negation Demo
 # Shows double negation, contraposition, and complex negated formulas
 

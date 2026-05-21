@@ -1,31 +1,24 @@
 import { join } from 'node:path';
-import { runGentzenReasoning, displayResults } from '../main.js';
+import { runGentzenReasoning, displayStory } from '../main.js';
+import { updateConfig } from '../utilities/config.js';
+import { LogLevel } from '../utilities/logger.js';
+
+updateConfig({ logging: { level: LogLevel.WARN } });
 
 const WD = import.meta.dirname;
 
-console.log('🧪 Testing custom directory paths...\n');
+// You can point runGentzenReasoning at any scenario file and any resolver
+// directory. Inline customResolvers stack on top — caller-supplied resolvers
+// win over same-named discovered ones.
+//
+const results = await runGentzenReasoning(
+    join(WD, './demo-custom/my-scenarios/simple-test.yaml'),
+    {
+        resolversPath: join(WD, './demo-custom/my-resolvers'),
+        customResolvers: { CustomTestFact: () => true }
+    }
+);
 
-try {
-    const results = await runGentzenReasoning(
-        join(WD, './demo-custom/my-scenarios/simple-test.yaml'),
-        {
-            verbose: true,
-            resolversPath: join(WD, './demo-custom/my-resolvers'),
-            customResolvers: {
-                CustomTestFact: () => true
-            }
-        }
-    );
-    
-    // Display results with verbose output
-    displayResults(results, { verbose: true });
-    
-    console.log('\n📊 Function returned:');
-    console.log(`Scenario: ${results.scenarioPath}`);
-    console.log(`Proven: ${results.summary.provenTargets}/${results.summary.totalTargets}`);
-    console.log(`Loaded modules: ${results.summary.loadedFiles.join(', ')}`);
-    console.log(`Resolver path used: Custom path working!`);
-    
-} catch (error) {
-    console.error('Test failed:', error.message);
-}
+displayStory(results, {
+    description: 'Custom scenario and resolver directory paths, plus an inline override.'
+});

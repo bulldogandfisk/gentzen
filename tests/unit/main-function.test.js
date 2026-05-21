@@ -65,7 +65,7 @@ test('runGentzenReasoning - mixed custom and auto resolvers', async t => {
             CustomTestFact: () => true
         }
     });
-    
+
     assertScenarioStructure(t, results);
     t.true('CustomTestFact' in results.factResolutions);
     t.is(results.factResolutions.CustomTestFact, true);

@@ -1,3 +1,5 @@
+# yaml-language-server: $schema=../../schemas/scenario.schema.json
+
 propositions:
   # The 'propositions' section lists all the named conclusions or goals
   # that our proof system can target or derive. These typically represent

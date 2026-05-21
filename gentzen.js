@@ -18,9 +18,11 @@ import {
     extractMissingFactsFromFormula
 } from './utilities/formulaUtils.js';
 import { getConfigSection } from './utilities/config.js';
+import { createLogger } from './utilities/logger.js';
 
-// Read safeguard limits from config, falling back to defaults
-//
+const _logger = createLogger(getConfigSection('logging'));
+
+// Reasoning limits, read from config with built-in defaults.
 function getReasoningLimits() {
     const config = getConfigSection('reasoning') || {};
     return {
@@ -36,16 +38,13 @@ export function parseFormula(formulaStr) {
     if (typeof formulaStr !== 'string' || formulaStr.trim().length === 0) {
         throw new Error('parseFormula requires a non-empty string argument');
     }
-    // Parse the formula string into AST
     const ast = parseFormulaFromString(formulaStr);
-    
-    // Normalize the AST (apply double negation elimination, etc.)
     const normalizedAST = normalizeAST(ast);
-    
+
     return {
-        raw: formulaStr,                    // Original string
-        ast: normalizedAST,                 // Parsed and normalized AST
-        toString: () => astToStringImpl(normalizedAST)  // Canonical string form
+        raw: formulaStr,
+        ast: normalizedAST,
+        toString: () => astToStringImpl(normalizedAST)
     };
 }
 
@@ -117,12 +116,34 @@ export class GentzenSystem {
         this._knownFormulas = new Set();
     }
 
+    // Strict-mode invariant check on _knownFormulas.
+    // When validation.strictMode is true, every mutating method calls this
+    // to confirm the dedup index has not drifted from steps + facts.
+    //
+    _assertKnownFormulasInvariant(methodName) {
+        const validation = getConfigSection('validation') || {};
+        if (!validation.strictMode) { return; }
+        const rebuilt = buildKnownFormulas(this);
+        if (rebuilt.size !== this._knownFormulas.size) {
+            throw new Error(
+                `_knownFormulas size mismatch after ${methodName}: ` +
+                `rebuilt=${rebuilt.size}, tracked=${this._knownFormulas.size}`
+            );
+        }
+        for (const f of rebuilt) {
+            if (!this._knownFormulas.has(f)) {
+                throw new Error(`_knownFormulas missing "${f}" after ${methodName}`);
+            }
+        }
+    }
+
     addFact(formulaStr) {
         if (typeof formulaStr !== 'string' || formulaStr.trim().length === 0) {
             throw new Error('addFact requires a non-empty string argument');
         }
         this.facts.add(formulaStr);
         this._knownFormulas.add(normalizeFormula(formulaStr));
+        this._assertKnownFormulasInvariant('addFact');
     }
 
     // Check if a fact is available (either in facts or proven)
@@ -172,6 +193,7 @@ export class GentzenSystem {
         };
         this.steps.push(step);
         this._knownFormulas.add(normalizeFormula(formulaStr));
+        this._assertKnownFormulasInvariant('addProposition');
         return step;
     }
 
@@ -244,6 +266,7 @@ export class GentzenSystem {
         };
         this.steps.push(newStep);
         this._knownFormulas.add(normalizeFormula(newFormula));
+        this._assertKnownFormulasInvariant('alphaRule');
         return newStep;
     }
 
@@ -261,6 +284,7 @@ export class GentzenSystem {
         };
         this.steps.push(newStep);
         this._knownFormulas.add(normalizeFormula(newFormula));
+        this._assertKnownFormulasInvariant('betaRule');
         return newStep;
     }
 
@@ -288,6 +312,7 @@ export class GentzenSystem {
         };
         this.steps.push(newStep);
         this._knownFormulas.add(normalizeFormula(newFormula));
+        this._assertKnownFormulasInvariant('contrapositionRule');
         return newStep;
     }
 
@@ -316,6 +341,7 @@ export class GentzenSystem {
         };
         this.steps.push(newStep);
         this._knownFormulas.add(normalizeFormula(newFormula));
+        this._assertKnownFormulasInvariant('doubleNegationRule');
         return newStep;
     }
 
@@ -333,6 +359,7 @@ export class GentzenSystem {
         };
         this.steps.push(newStep);
         this._knownFormulas.add(normalizeFormula(newFormula));
+        this._assertKnownFormulasInvariant('equivalenceRule');
         return newStep;
     }
 
@@ -394,8 +421,7 @@ export class GentzenSystem {
             if (stepI.formulas.size !== 1) { continue; }
             const formula = [...stepI.formulas][0];
 
-            // Contraposition: only valid on implications
-            //
+            // Contraposition applies only to implications.
             try {
                 const parsed = parseFormula(formula);
                 if (isImplication(parsed.ast)) {
@@ -410,11 +436,9 @@ export class GentzenSystem {
                     }
                 }
             } catch (e) {
-                // Not a valid implication, skip
+                _logger.debug(`contraposition skipped for "${formula}": ${e.message}`);
             }
 
-            // Double negation introduction
-            //
             try {
                 const parsedForIntro = parseFormulaFromString(formula);
                 const introCandidate = astToStringImpl(negate(negate(parsedForIntro)));
@@ -424,11 +448,9 @@ export class GentzenSystem {
                     newSystems.push(sysClone);
                 }
             } catch (e) {
-                // Parse error, skip
+                _logger.debug(`double-negation introduction skipped for "${formula}": ${e.message}`);
             }
 
-            // Double negation elimination
-            //
             try {
                 const parsedForElim = parseFormulaFromString(formula);
                 if (isNegation(parsedForElim) && isNegation(parsedForElim.operand)) {
@@ -440,7 +462,7 @@ export class GentzenSystem {
                     }
                 }
             } catch (e) {
-                // Parse error, skip
+                _logger.debug(`double-negation elimination skipped for "${formula}": ${e.message}`);
             }
         }
 

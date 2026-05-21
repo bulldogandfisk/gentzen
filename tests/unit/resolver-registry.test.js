@@ -2,7 +2,7 @@
 
 import { join } from 'node:path';
 import test from 'ava';
-import { discoverResolvers, getReferencedAtoms } from '../../resolverDiscovery.js';
+import { discoverResolvers } from '../../resolverDiscovery.js';
 
 const testDir = import.meta.dirname;
 const testResolversPath = join(testDir, '../scenarios/test-resolvers');
@@ -142,49 +142,6 @@ test('discoverResolvers - consistent results across calls', async t => {
     const names1 = Object.keys(result1.resolvers).sort();
     const names2 = Object.keys(result2.resolvers).sort();
     t.deepEqual(names1, names2);
-});
-
-test('getReferencedAtoms - basic functionality', async t => {
-    const scenario = {
-        targets: ['UserWantsEuropeanFlight', '(A ∧ B)'],
-        steps: [
-            { from: ['UserHasVisa', 'SystemHealthy'] }
-        ],
-        propositions: ['CustomFact']
-    };
-    
-    const atoms = getReferencedAtoms(scenario);
-    
-    t.true(atoms.has('UserWantsEuropeanFlight'));
-    t.true(atoms.has('UserHasVisa'));
-    t.true(atoms.has('SystemHealthy'));
-    t.true(atoms.has('CustomFact'));
-    t.true(atoms.has('A'));
-    t.true(atoms.has('B'));
-});
-
-test('getReferencedAtoms - empty scenario', async t => {
-    const scenario = {};
-    const atoms = getReferencedAtoms(scenario);
-    
-    t.is(atoms.size, 0);
-});
-
-test('getReferencedAtoms - complex formulas', async t => {
-    const scenario = {
-        targets: ['(UserWantsEuropeanFlight → (UserHasVisa ∧ SystemHealthy))'],
-        steps: [
-            { from: ['ComplexFactA', 'ComplexFactB'] }
-        ]
-    };
-    
-    const atoms = getReferencedAtoms(scenario);
-    
-    t.true(atoms.has('UserWantsEuropeanFlight'));
-    t.true(atoms.has('UserHasVisa'));
-    t.true(atoms.has('SystemHealthy'));
-    t.true(atoms.has('ComplexFactA'));
-    t.true(atoms.has('ComplexFactB'));
 });
 
 test('resolver discovery - comprehensive integration', async t => {

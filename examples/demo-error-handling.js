@@ -1,56 +1,51 @@
-import { runGentzenReasoning, displayResults } from '../main.js';
 import { join } from 'node:path';
+import { runGentzenReasoning, displayStory } from '../main.js';
+import { updateConfig } from '../utilities/config.js';
+import { LogLevel } from '../utilities/logger.js';
+
+updateConfig({ logging: { level: LogLevel.ERROR } });
 
 const WD = import.meta.dirname;
 
-console.log('🧪 Testing error handling scenarios...\n');
+// Each block exercises a different failure mode. The engine throws on
+// scenario-load failures; runtime failures (missing resolver directory,
+// missing facts) surface in the result object instead of throwing.
+//
 
-// Test 1: Non-existent scenario file
-console.log('Test 1: Non-existent scenario file');
+console.log('Case 1: scenario file does not exist (engine throws)');
 try {
-    const results = await runGentzenReasoning('./non-existent-scenario.yaml');
-    console.log('❌ Should have thrown error');
+    await runGentzenReasoning('./non-existent-scenario.yaml');
+    console.log('  unexpected: no error thrown');
 } catch (error) {
-    console.log('✅ Correctly caught error:', error.message);
+    console.log(`  caught: ${error.message}`);
 }
 
-// Test 2: Invalid YAML syntax
-console.log('\nTest 2: Invalid YAML syntax');
+console.log('\nCase 2: invalid YAML syntax (engine throws)');
 try {
-    const results = await runGentzenReasoning(
+    await runGentzenReasoning(
         join(WD, '../tests/scenarios/test-scenarios/invalid-syntax.yaml')
     );
-    console.log('❌ Should have thrown error');
+    console.log('  unexpected: no error thrown');
 } catch (error) {
-    console.log('✅ Correctly caught error:', error.message);
+    console.log(`  caught: ${error.message}`);
 }
 
-// Test 3: Missing resolvers path
-console.log('\nTest 3: Missing resolvers path');
+console.log('\nCase 3: resolvers path does not exist (engine continues with empty fact set)');
 try {
     const results = await runGentzenReasoning(
         join(WD, './scenarios/mixed-scenario.yaml'),
         { resolversPath: './non-existent-path' }
     );
-    console.log('✅ Handled missing resolvers gracefully');
-    console.log(`Result: ${results.summary.provenTargets}/${results.summary.totalTargets} targets proven`);
+    console.log(`  ran cleanly: ${results.summary.provenTargets}/${results.summary.totalTargets} targets proven, ${results.summary.missingFacts} missing facts`);
 } catch (error) {
-    console.log('✅ Correctly caught error:', error.message);
+    console.log(`  unexpected error: ${error.message}`);
 }
 
-// Test 4: Scenario with missing facts
-console.log('\nTest 4: Scenario with missing facts');
-try {
-    const results = await runGentzenReasoning(
-        join(WD, '../tests/scenarios/test-scenarios/missing-facts.yaml'),
-        { resolversPath: join(WD, '../tests/scenarios/test-resolvers') }
-    );
-    
-    console.log('✅ Handled missing facts scenario');
-    console.log(`Result: ${results.summary.provenTargets}/${results.summary.totalTargets} targets proven`);
-    console.log(`Missing facts: ${results.missingFacts.join(', ')}`);
-    
-    displayResults(results);
-} catch (error) {
-    console.log('❌ Unexpected error:', error.message);
-}
+console.log('\nCase 4: scenario references facts no resolver provides (engine reports missing facts)');
+const results = await runGentzenReasoning(
+    join(WD, '../tests/scenarios/test-scenarios/missing-facts.yaml'),
+    { resolversPath: join(WD, '../tests/scenarios/test-resolvers') }
+);
+displayStory(results, {
+    description: 'Missing facts surface in target.missingFacts and skippedSteps with reason="missing_fact".'
+});

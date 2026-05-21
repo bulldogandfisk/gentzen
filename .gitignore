@@ -30,6 +30,7 @@ poetry.lock
 pdm.lock
 .claude
 CLAUDE*
+coverage
 
 .vscode
 .idea

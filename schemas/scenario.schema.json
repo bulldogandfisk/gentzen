@@ -1,0 +1,114 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://raw.githubusercontent.com/bulldogandfisk/gentzen/master/schemas/scenario.schema.json",
+    "title": "Gentzen Scenario",
+    "description": "A Gentzen reasoning scenario: propositions, derivation steps, and proof targets.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["targets"],
+    "properties": {
+        "propositions": {
+            "type": "array",
+            "description": "Atomic propositions referenced by the scenario.",
+            "items": {
+                "type": "string",
+                "pattern": "^[A-Z][a-zA-Z0-9]*$",
+                "description": "PascalCase identifier."
+            },
+            "uniqueItems": true
+        },
+        "steps": {
+            "type": "array",
+            "description": "Derivation steps applied in order to produce intermediate formulas.",
+            "items": { "$ref": "#/definitions/step" }
+        },
+        "targets": {
+            "type": "array",
+            "description": "Formulas to prove. At least one is required.",
+            "minItems": 1,
+            "items": {
+                "type": "string",
+                "minLength": 1
+            }
+        }
+    },
+    "definitions": {
+        "step": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["rule", "from"],
+            "properties": {
+                "rule": {
+                    "type": "string",
+                    "enum": [
+                        "alpha",
+                        "beta",
+                        "contraposition",
+                        "doubleNegation",
+                        "equivalence"
+                    ],
+                    "description": "Inference rule applied at this step."
+                },
+                "subtype": {
+                    "type": "string",
+                    "enum": ["and", "implies", "or", "introduction", "elimination"],
+                    "description": "Rule-specific subtype. alpha: 'and' or 'implies'. doubleNegation: 'introduction' or 'elimination'. beta defaults to 'or'."
+                },
+                "from": {
+                    "type": "array",
+                    "description": "Formulas that feed this rule. alpha/beta/equivalence take two; contraposition/doubleNegation take one.",
+                    "minItems": 1,
+                    "maxItems": 2,
+                    "items": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                }
+            },
+            "allOf": [
+                {
+                    "if": { "properties": { "rule": { "const": "alpha" } } },
+                    "then": {
+                        "properties": {
+                            "subtype": { "enum": ["and", "implies"] },
+                            "from": { "minItems": 2, "maxItems": 2 }
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "rule": { "const": "beta" } } },
+                    "then": {
+                        "properties": {
+                            "from": { "minItems": 2, "maxItems": 2 }
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "rule": { "const": "equivalence" } } },
+                    "then": {
+                        "properties": {
+                            "from": { "minItems": 2, "maxItems": 2 }
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "rule": { "const": "contraposition" } } },
+                    "then": {
+                        "properties": {
+                            "from": { "minItems": 1, "maxItems": 1 }
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "rule": { "const": "doubleNegation" } } },
+                    "then": {
+                        "properties": {
+                            "subtype": { "enum": ["introduction", "elimination"] },
+                            "from": { "minItems": 1, "maxItems": 1 }
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

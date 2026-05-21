@@ -2,7 +2,7 @@
 
 import { join } from 'node:path';
 import test from 'ava';
-import { loadGentzenScenario, runFactResolvers, createScenarioTemplate } from '../../loadFromYaml.js';
+import { loadGentzenScenario, runFactResolvers } from '../../loadFromYaml.js';
 import { allMockResolvers } from '../scenarios/test-resolvers/mockResolvers.js';
 
 const testDir = import.meta.dirname;
@@ -139,20 +139,3 @@ test('loadGentzenScenario - nonexistent file', async t => {
         );
 });
 
-test('createScenarioTemplate - removes facts key from scenario', t => {
-    const scenario = {
-        propositions: ['A'],
-        targets: ['A'],
-        facts: { Foo: true }
-    };
-    const template = createScenarioTemplate(scenario);
-
-    t.false('facts' in template);
-    t.true('propositions' in template);
-    t.true('targets' in template);
-});
-
-test('createScenarioTemplate - empty object returns empty object', t => {
-    const template = createScenarioTemplate({});
-    t.deepEqual(template, {});
-});

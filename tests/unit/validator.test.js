@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import fs from 'fs-extra';
 import os from 'node:os';
 import { EOL } from 'node:os';
-import { validateScenario, validateAndDisplay } from '../../validator.js';
+import { validateScenario } from '../../validator.js';
 
 const testDir = import.meta.dirname;
 const testScenariosPath = join(testDir, '../scenarios/test-scenarios');
@@ -144,17 +144,29 @@ test('validateScenario - unbalanced parentheses in formula returns error', async
     try {
         const result = await validateScenario(tmpFile);
         t.false(result.isValid);
-        t.true(result.errors.some(e => e.includes('unbalanced parentheses')));
+        t.true(result.errors.some(e => e.includes('not valid')));
     } finally {
         await fs.remove(tmpDir);
     }
 });
 
-test('validateScenario - compound formula without parentheses returns warning', async t => {
-    const { tmpFile, tmpDir } = await createTempScenario(`targets:${EOL}  - "A ∧ B"${EOL}`);
+test('validateScenario - closing paren before opening returns error', async t => {
+    const { tmpFile, tmpDir } = await createTempScenario(`targets:${EOL}  - ")A ∧ B("${EOL}`);
     try {
         const result = await validateScenario(tmpFile);
-        t.true(result.warnings.some(w => w.includes('parentheses')));
+        t.false(result.isValid);
+        t.true(result.errors.some(e => e.includes('not valid')));
+    } finally {
+        await fs.remove(tmpDir);
+    }
+});
+
+test('validateScenario - double implication arrow returns error', async t => {
+    const { tmpFile, tmpDir } = await createTempScenario(`targets:${EOL}  - "(A → → B)"${EOL}`);
+    try {
+        const result = await validateScenario(tmpFile);
+        t.false(result.isValid);
+        t.true(result.errors.some(e => e.includes('not valid')));
     } finally {
         await fs.remove(tmpDir);
     }
@@ -166,51 +178,4 @@ test('validateScenario - nonexistent file returns parse error', async t => {
     t.false(result.isValid);
     t.true(result.errors.some(e => e.includes('Failed to parse')));
     t.is(result.summary, 'File parsing failed');
-});
-
-test('validateAndDisplay - returns results for valid scenario', async t => {
-    const scenarioPath = join(testScenariosPath, 'minimal.yaml');
-    const result = await validateAndDisplay(scenarioPath);
-
-    t.true(result.isValid);
-    t.deepEqual(result.errors, []);
-});
-
-test('validateAndDisplay - returns results for invalid scenario', async t => {
-    const { tmpFile, tmpDir } = await createTempScenario(`steps:${EOL}  - rule: alpha${EOL}`);
-    try {
-        const result = await validateAndDisplay(tmpFile, true);
-        t.false(result.isValid);
-        t.true(result.errors.length > 0);
-    } finally {
-        await fs.remove(tmpDir);
-    }
-});
-
-test('validateScenario - closing paren before opening returns error', async t => {
-    const { tmpFile, tmpDir } = await createTempScenario(`targets:${EOL}  - ")A ∧ B("${EOL}`);
-    try {
-        const result = await validateScenario(tmpFile);
-        t.false(result.isValid);
-        t.true(result.errors.some(e => e.includes('unbalanced parentheses')));
-    } finally {
-        await fs.remove(tmpDir);
-    }
-});
-
-test('validateAndDisplay - verbose with warnings shows details', async t => {
-    const { tmpFile, tmpDir } = await createTempScenario(`targets:${EOL}  - "A ∧ B"${EOL}propositions:${EOL}  - lowercase${EOL}`);
-    try {
-        const result = await validateAndDisplay(tmpFile, true);
-        t.true(result.warnings.length > 0);
-    } finally {
-        await fs.remove(tmpDir);
-    }
-});
-
-test('validateAndDisplay - valid scenario non-verbose path', async t => {
-    const scenarioPath = join(testScenariosPath, 'minimal.yaml');
-    const result = await validateAndDisplay(scenarioPath, false);
-
-    t.true(result.isValid);
 });

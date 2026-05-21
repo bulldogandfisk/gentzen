@@ -103,14 +103,15 @@ test('auto-negation - edge cases and conflicts', async t => {
 });
 
 test('auto-negation - no interference with existing scenarios', async t => {
-    // Test that auto-negation doesn't break existing scenarios
     const scenarioPath = join(testScenariosPath, 'all-rules.yaml');
-    
+
+    // selectiveResolution: false to exercise every resolver in test-resolvers,
+    // including the ones whose atoms are not referenced by this scenario.
     const results = await runGentzenReasoning(scenarioPath, {
-        resolversPath: join(import.meta.dirname, '../scenarios/test-resolvers')
+        resolversPath: join(import.meta.dirname, '../scenarios/test-resolvers'),
+        selectiveResolution: false
     });
-    
-    // Should have auto-negated facts for false resolvers
+
     const hasAutoNegated = results.availableFacts.some(fact => fact.startsWith('~'));
     t.true(hasAutoNegated, 'Should have some auto-negated facts');
     
