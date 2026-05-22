@@ -9,7 +9,7 @@
 //
 
 import { join } from 'node:path';
-import { runGentzenReasoning, displayStory } from '../main.js';
+import { runGentzenReasoning, displayResults } from '../main.js';
 import { updateConfig } from '../utilities/config.js';
 import { LogLevel } from '../utilities/logger.js';
 
@@ -27,7 +27,7 @@ async function executeAction(name) {
 
 async function gatedRun(actionName, customResolvers, description) {
     const results = await runGentzenReasoning(scenarioPath, { customResolvers });
-    displayStory(results, { description });
+    displayResults(results, { mode: 'narrative', description });
 
     const allowed = results.summary.provenTargets === results.summary.totalTargets;
     if (allowed) {

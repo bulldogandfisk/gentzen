@@ -1,12 +1,12 @@
-// display-story.test.js
-// Smoke tests for displayStory. The function only writes to a logger,
-// so we capture output via a custom logger and assert the shape of
-// what it emitted.
+// display-narrative.test.js
+// Smoke tests for displayResults in narrative mode. The function only writes
+// to a logger, so we capture output via a custom logger and assert the shape
+// of what it emitted.
 //
 
 import test from 'ava';
 import { join } from 'node:path';
-import { runGentzenReasoning, displayStory } from '../../main.js';
+import { runGentzenReasoning, displayResults } from '../../main.js';
 import { allMockResolvers } from '../scenarios/test-resolvers/mockResolvers.js';
 
 const testDir = import.meta.dirname;
@@ -32,15 +32,15 @@ function captureLogger() {
     };
 }
 
-test('displayStory - prints all five sections with header and tally', async t => {
+test('narrative - prints all five sections with header and tally', async t => {
     const results = await runGentzenReasoning(
         join(testScenariosPath, 'all-rules.yaml'),
         { customResolvers: allMockResolvers }
     );
 
-    const { lines, logger } = captureLogger();
-    displayStory(results, { description: 'unit test smoke', logger });
-    const all = lines.join('\n');
+    const capture = captureLogger();
+    displayResults(results, { mode: 'narrative', description: 'unit test smoke', logger: capture.logger });
+    const all = capture.lines.join('\n');
 
     t.true(all.includes('Scenario:'), 'header includes Scenario:');
     t.true(all.includes('unit test smoke'), 'description is rendered');
@@ -51,7 +51,7 @@ test('displayStory - prints all five sections with header and tally', async t =>
     t.true(all.includes('Result:'), 'tally line');
 });
 
-test('displayStory - distinguishes ASSUMED proposition from DERIVED rule output', t => {
+test('narrative - distinguishes ASSUMED proposition from DERIVED rule output', t => {
     // Stub result where we know exactly which target should get which label:
     //
     //   - 'Foo' is a proposition target (derivation: 'asserted')
@@ -90,16 +90,16 @@ test('displayStory - distinguishes ASSUMED proposition from DERIVED rule output'
         system: { steps: [propFoo, andStep, propA, propB], facts: new Set() }
     };
 
-    const { lines, logger } = captureLogger();
-    displayStory(stubResults, { logger });
+    const capture = captureLogger();
+    displayResults(stubResults, { mode: 'narrative', logger: capture.logger });
 
-    const fooIdx = lines.findIndex(l => l.includes('Foo') && l.includes('ASSUMED'));
-    const andIdx = lines.findIndex(l => l.includes('(A ∧ B)') && l.includes('PROVEN'));
+    const fooIdx = capture.lines.findIndex(l => l.includes('Foo') && l.includes('ASSUMED'));
+    const andIdx = capture.lines.findIndex(l => l.includes('(A ∧ B)') && l.includes('PROVEN'));
     t.true(fooIdx >= 0, 'Foo should render as ⚠ ASSUMED, not ✅ PROVEN');
     t.true(andIdx >= 0, '(A ∧ B) should render as ✅ PROVEN');
 
-    const fooLabel = lines[fooIdx + 1] || '';
-    const andLabel = lines[andIdx + 1] || '';
+    const fooLabel = capture.lines[fooIdx + 1] || '';
+    const andLabel = capture.lines[andIdx + 1] || '';
 
     t.true(
         fooLabel.includes('declared as proposition'),
@@ -111,21 +111,21 @@ test('displayStory - distinguishes ASSUMED proposition from DERIVED rule output'
     );
 });
 
-test('displayStory - failed target with no missingFacts surfaces skipped-step section', async t => {
+test('narrative - failed target with no missingFacts surfaces skipped-step section', async t => {
     const results = await runGentzenReasoning(
         join(testScenariosPath, 'missing-facts.yaml'),
         { customResolvers: allMockResolvers }
     );
 
-    const { lines, logger } = captureLogger();
-    displayStory(results, { logger });
-    const all = lines.join('\n');
+    const capture = captureLogger();
+    displayResults(results, { mode: 'narrative', logger: capture.logger });
+    const all = capture.lines.join('\n');
 
     t.true(all.includes('❌ FAILED'), 'at least one failed target');
     t.true(all.includes('Skipped steps'), 'skipped-steps section is shown');
 });
 
-test('displayStory - empty propositions/steps falls back to gray placeholder', async t => {
+test('narrative - empty propositions/steps falls back to gray placeholder', t => {
     // Synthetic minimal result object — no scenario load required.
     //
     const stubResults = {
@@ -150,9 +150,9 @@ test('displayStory - empty propositions/steps falls back to gray placeholder', a
         system: { steps: [], facts: new Set() }
     };
 
-    const { lines, logger } = captureLogger();
-    displayStory(stubResults, { logger });
-    const all = lines.join('\n');
+    const capture = captureLogger();
+    displayResults(stubResults, { mode: 'narrative', logger: capture.logger });
+    const all = capture.lines.join('\n');
 
     t.true(all.includes('(none declared)'), 'propositions placeholder');
     t.true(all.includes('(no resolvers ran)'), 'facts placeholder');
@@ -160,7 +160,7 @@ test('displayStory - empty propositions/steps falls back to gray placeholder', a
     t.true(all.includes('0/0 targets proven'), 'zero-tally rendered');
 });
 
-test('displayStory - resolver errors surface in the Facts section', t => {
+test('narrative - resolver errors surface in the Facts section', t => {
     const stubResults = {
         scenarioPath: '/tmp/synthetic.yaml',
         propositions: ['A'],
@@ -183,9 +183,9 @@ test('displayStory - resolver errors surface in the Facts section', t => {
         system: { steps: [{ origin: 'Proposition', ruleType: 'fact', from: [], formulas: new Set(['A']) }], facts: new Set() }
     };
 
-    const { lines, logger } = captureLogger();
-    displayStory(stubResults, { logger });
-    const all = lines.join('\n');
+    const capture = captureLogger();
+    displayResults(stubResults, { mode: 'narrative', logger: capture.logger });
+    const all = capture.lines.join('\n');
 
     t.true(all.includes('Resolver errors'));
     t.true(all.includes('/path/to/broken.js'));

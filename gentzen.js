@@ -61,11 +61,15 @@ export function astToString(astOrFormulaObj) {
     throw new Error('Invalid formula object - must have ast or toString method');
 }
 
-// Deep-clone a GentzenSystem, preserving facts, steps, and signature cache
+// Clone a GentzenSystem for BFS expansion. `facts` is shared by reference:
+// no rule method mutates it, and addFact is only called during scenario
+// load (before any BFS expansion). `_knownFormulas` is copied because rule
+// methods do mutate it via _recordStep. `steps` is copied (own array with
+// fresh formula Sets) because clones append derivation steps independently.
 //
 const cloneSystem = (system) => {
     const newSys = new GentzenSystem();
-    newSys.facts = new Set(system.facts);
+    newSys.facts = system.facts;
     newSys.steps = system.steps.map(step => ({
         origin: step.origin,
         ruleType: step.ruleType,
@@ -230,6 +234,22 @@ export class GentzenSystem {
         this._assertKnownFormulasInvariant('addFact');
     }
 
+    // Append a derivation step, update _knownFormulas, run invariant check.
+    // Every rule method routes through here so the bookkeeping lives in one place.
+    //
+    _recordStep({ origin, ruleType, from, formula }) {
+        const newStep = {
+            origin,
+            ruleType,
+            from,
+            formulas: new Set([formula])
+        };
+        this.steps.push(newStep);
+        this._knownFormulas.add(normalizeFormula(formula));
+        this._assertKnownFormulasInvariant(origin);
+        return newStep;
+    }
+
     // Check if a fact is available (either in facts or proven)
     isFactAvailable(factName) {
         if (this.facts.has(factName)) {
@@ -302,16 +322,12 @@ export class GentzenSystem {
     }
 
     addProposition(formulaStr) {
-        const step = {
+        return this._recordStep({
             origin: 'Proposition',
             ruleType: 'fact',
             from: [],
-            formulas: new Set([formulaStr])
-        };
-        this.steps.push(step);
-        this._knownFormulas.add(normalizeFormula(formulaStr));
-        this._assertKnownFormulasInvariant('addProposition');
-        return step;
+            formula: formulaStr
+        });
     }
 
     findStepsContaining(formula) {
@@ -373,17 +389,12 @@ export class GentzenSystem {
         if (ruleType !== 'and') {
             throw new Error(`alphaRule: unsupported subtype '${ruleType}'. Only 'and' is supported. Declare implications as compound propositions.`);
         }
-        const newFormula = `(${A} ∧ ${B})`;
-        const newStep = {
+        return this._recordStep({
             origin: 'AlphaRule',
             ruleType,
             from: [step1, step2],
-            formulas: new Set([newFormula])
-        };
-        this.steps.push(newStep);
-        this._knownFormulas.add(normalizeFormula(newFormula));
-        this._assertKnownFormulasInvariant('alphaRule');
-        return newStep;
+            formula: `(${A} ∧ ${B})`
+        });
     }
 
     // Applies the beta rule (or) to two steps
@@ -391,17 +402,12 @@ export class GentzenSystem {
     betaRule(step1, step2) {
         const A = getUniqueFormula(step1);
         const B = getUniqueFormula(step2);
-        const newFormula = `(${A} ∨ ${B})`;
-        const newStep = {
+        return this._recordStep({
             origin: 'BetaRule',
             ruleType: 'or',
             from: [step1, step2],
-            formulas: new Set([newFormula])
-        };
-        this.steps.push(newStep);
-        this._knownFormulas.add(normalizeFormula(newFormula));
-        this._assertKnownFormulasInvariant('betaRule');
-        return newStep;
+            formula: `(${A} ∨ ${B})`
+        });
     }
 
     // Applies contraposition to a single step
@@ -415,21 +421,14 @@ export class GentzenSystem {
         }
 
         const parts = getImplicationParts(parsed.ast);
-        const negatedConsequent = negate(parts.consequent);
-        const negatedAntecedent = negate(parts.antecedent);
-        const contrapositive = createImplication(negatedConsequent, negatedAntecedent);
-        const newFormula = astToStringImpl(contrapositive);
+        const contrapositive = createImplication(negate(parts.consequent), negate(parts.antecedent));
 
-        const newStep = {
+        return this._recordStep({
             origin: 'ContrapositionRule',
             ruleType: 'contraposition',
             from: [step],
-            formulas: new Set([newFormula])
-        };
-        this.steps.push(newStep);
-        this._knownFormulas.add(normalizeFormula(newFormula));
-        this._assertKnownFormulasInvariant('contrapositionRule');
-        return newStep;
+            formula: astToStringImpl(contrapositive)
+        });
     }
 
     // Applies double negation (intro or elim) to a single step.
@@ -442,23 +441,17 @@ export class GentzenSystem {
         let newFormula;
         if (mode === 'introduction') {
             newFormula = astToStringImpl(negate(negate(parsed)));
+        } else if (isNegation(parsed) && isNegation(parsed.operand)) {
+            newFormula = astToStringImpl(normalizeAST(parsed.operand.operand));
         } else {
-            if (isNegation(parsed) && isNegation(parsed.operand)) {
-                newFormula = astToStringImpl(normalizeAST(parsed.operand.operand));
-            } else {
-                newFormula = f;
-            }
+            newFormula = f;
         }
-        const newStep = {
+        return this._recordStep({
             origin: 'DoubleNegationRule',
             ruleType: mode === 'introduction' ? 'doubleNegIntro' : 'doubleNegElim',
             from: [step],
-            formulas: new Set([newFormula])
-        };
-        this.steps.push(newStep);
-        this._knownFormulas.add(normalizeFormula(newFormula));
-        this._assertKnownFormulasInvariant('doubleNegationRule');
-        return newStep;
+            formula: newFormula
+        });
     }
 
     // Applies disjunction elimination (proof by cases): from (A ∨ B),
@@ -503,17 +496,12 @@ export class GentzenSystem {
             throw new Error(`orEliminationRule: implication antecedents "${astToStringImpl(partsA.antecedent)}" and "${astToStringImpl(partsB.antecedent)}" do not match the disjuncts of "${disjFormula}".`);
         }
 
-        const newFormula = astToStringImpl(partsA.consequent);
-        const newStep = {
+        return this._recordStep({
             origin: 'OrEliminationRule',
             ruleType: 'orElim',
             from: [disjStep, implStepA, implStepB],
-            formulas: new Set([newFormula])
-        };
-        this.steps.push(newStep);
-        this._knownFormulas.add(normalizeFormula(newFormula));
-        this._assertKnownFormulasInvariant('orEliminationRule');
-        return newStep;
+            formula: astToStringImpl(partsA.consequent)
+        });
     }
 
     // Applies conjunction elimination (left): from (A ∧ B), derive A.
@@ -524,17 +512,12 @@ export class GentzenSystem {
         if (!isConjunction(parsed)) {
             throw new Error('andEliminationL requires a conjunction.');
         }
-        const newFormula = astToStringImpl(parsed.left);
-        const newStep = {
+        return this._recordStep({
             origin: 'AndEliminationRule',
             ruleType: 'andElimL',
             from: [step],
-            formulas: new Set([newFormula])
-        };
-        this.steps.push(newStep);
-        this._knownFormulas.add(normalizeFormula(newFormula));
-        this._assertKnownFormulasInvariant('andEliminationL');
-        return newStep;
+            formula: astToStringImpl(parsed.left)
+        });
     }
 
     // Applies conjunction elimination (right): from (A ∧ B), derive B.
@@ -545,17 +528,12 @@ export class GentzenSystem {
         if (!isConjunction(parsed)) {
             throw new Error('andEliminationR requires a conjunction.');
         }
-        const newFormula = astToStringImpl(parsed.right);
-        const newStep = {
+        return this._recordStep({
             origin: 'AndEliminationRule',
             ruleType: 'andElimR',
             from: [step],
-            formulas: new Set([newFormula])
-        };
-        this.steps.push(newStep);
-        this._knownFormulas.add(normalizeFormula(newFormula));
-        this._assertKnownFormulasInvariant('andEliminationR');
-        return newStep;
+            formula: astToStringImpl(parsed.right)
+        });
     }
 
     // Applies disjunctive modus ponens: given ((A ∨ B) → C) and either
@@ -582,17 +560,12 @@ export class GentzenSystem {
             throw new Error(`disjunctiveModusPonensRule: second input "${disjunctFormula}" does not match either disjunct of "${astToStringImpl(parts.antecedent)}".`);
         }
 
-        const newFormula = astToStringImpl(parts.consequent);
-        const newStep = {
+        return this._recordStep({
             origin: 'DisjunctiveModusPonensRule',
             ruleType: 'disjunctiveMP',
             from: [implicationStep, disjunctStep],
-            formulas: new Set([newFormula])
-        };
-        this.steps.push(newStep);
-        this._knownFormulas.add(normalizeFormula(newFormula));
-        this._assertKnownFormulasInvariant('disjunctiveModusPonensRule');
-        return newStep;
+            formula: astToStringImpl(parts.consequent)
+        });
     }
 
     // Applies disjunctive syllogism: given (A ∨ B) and ~A, derive B.
@@ -623,17 +596,12 @@ export class GentzenSystem {
             throw new Error(`disjunctiveSyllogismRule: second input "${negFormula}" is not the negation of either disjunct of "${disjFormula}".`);
         }
 
-        const newFormula = astToStringImpl(survivorAst);
-        const newStep = {
+        return this._recordStep({
             origin: 'DisjunctiveSyllogismRule',
             ruleType: 'disjunctiveSyllogism',
             from: [disjunctionStep, negationStep],
-            formulas: new Set([newFormula])
-        };
-        this.steps.push(newStep);
-        this._knownFormulas.add(normalizeFormula(newFormula));
-        this._assertKnownFormulasInvariant('disjunctiveSyllogismRule');
-        return newStep;
+            formula: astToStringImpl(survivorAst)
+        });
     }
 
     // Applies modus tollens: given (A → B) and ~B, derive ~A.
@@ -656,17 +624,12 @@ export class GentzenSystem {
             throw new Error(`modusTollensRule: negated-consequent mismatch — implication's negated consequent is "${expectedNegConsString}", second input is "${negConsFormula}".`);
         }
 
-        const newFormula = astToStringImpl(negate(parts.antecedent));
-        const newStep = {
+        return this._recordStep({
             origin: 'ModusTollensRule',
             ruleType: 'modusTollens',
             from: [implicationStep, negatedConsequentStep],
-            formulas: new Set([newFormula])
-        };
-        this.steps.push(newStep);
-        this._knownFormulas.add(normalizeFormula(newFormula));
-        this._assertKnownFormulasInvariant('modusTollensRule');
-        return newStep;
+            formula: astToStringImpl(negate(parts.antecedent))
+        });
     }
 
     // Applies modus ponens: given (A → B) and A, derive B.
@@ -689,17 +652,12 @@ export class GentzenSystem {
             throw new Error(`modusPonensRule: antecedent mismatch — implication's antecedent is "${antecedentString}", second input is "${antFormula}".`);
         }
 
-        const newFormula = astToStringImpl(parts.consequent);
-        const newStep = {
+        return this._recordStep({
             origin: 'ModusPonensRule',
             ruleType: 'modusPonens',
             from: [implicationStep, antecedentStep],
-            formulas: new Set([newFormula])
-        };
-        this.steps.push(newStep);
-        this._knownFormulas.add(normalizeFormula(newFormula));
-        this._assertKnownFormulasInvariant('modusPonensRule');
-        return newStep;
+            formula: astToStringImpl(parts.consequent)
+        });
     }
 
 
@@ -755,6 +713,67 @@ export class GentzenSystem {
         //
         const cloneSourceAt = (clone, idx) => idx < stepCount ? clone.steps[idx] : factWrappers[idx - stepCount];
 
+        // Precompute everything we need about each source ONCE — parsed AST,
+        // canonical strings, and per-rule-shape derived data — so the nested
+        // loops below don't re-parse the same formula five times per (i,j)
+        // pair. A null entry means "skip this source" (multi-formula step
+        // or formulas.size !== 1).
+        //
+        const sourceMeta = new Array(sourceCount);
+        for (let s = 0; s < sourceCount; s += 1) {
+            const src = sourceAt(s);
+            if (src.formulas.size !== 1) {
+                sourceMeta[s] = null;
+                continue;
+            }
+            const formula = [...src.formulas][0];
+            const entry = {
+                formula,
+                formulaNorm: normalizeFormula(formula),
+                parsed: null,
+                isImplication: false,
+                isDisjunction: false,
+                isConjunction: false,
+                isDoubleNegated: false
+            };
+            try {
+                const parsed = parseFormulaFromString(formula);
+                entry.parsed = parsed;
+                if (isImplication(parsed)) {
+                    const parts = getImplicationParts(parsed);
+                    entry.isImplication = true;
+                    entry.antecedent = parts.antecedent;
+                    entry.consequent = parts.consequent;
+                    entry.antNorm = normalizeFormula(astToStringImpl(parts.antecedent));
+                    entry.consNorm = normalizeFormula(astToStringImpl(parts.consequent));
+                    entry.negConsNorm = normalizeFormula(astToStringImpl(negate(parts.consequent)));
+                    if (isDisjunction(parts.antecedent)) {
+                        entry.antIsDisjunction = true;
+                        entry.antLeftNorm = normalizeFormula(astToStringImpl(parts.antecedent.left));
+                        entry.antRightNorm = normalizeFormula(astToStringImpl(parts.antecedent.right));
+                    }
+                } else if (isDisjunction(parsed)) {
+                    entry.isDisjunction = true;
+                    entry.leftStr = astToStringImpl(parsed.left);
+                    entry.rightStr = astToStringImpl(parsed.right);
+                    entry.leftNorm = normalizeFormula(entry.leftStr);
+                    entry.rightNorm = normalizeFormula(entry.rightStr);
+                    entry.negLeftNorm = normalizeFormula(astToStringImpl(negate(parsed.left)));
+                    entry.negRightNorm = normalizeFormula(astToStringImpl(negate(parsed.right)));
+                } else if (isConjunction(parsed)) {
+                    entry.isConjunction = true;
+                    entry.leftStr = astToStringImpl(parsed.left);
+                    entry.rightStr = astToStringImpl(parsed.right);
+                } else if (isNegation(parsed) && isNegation(parsed.operand)) {
+                    entry.isDoubleNegated = true;
+                    entry.dnElimStr = astToStringImpl(normalizeAST(parsed.operand.operand));
+                }
+            } catch (e) {
+                _logger.debug(`expandOneLevel: parse failed for "${formula}": ${e.message}`);
+            }
+            sourceMeta[s] = entry;
+        }
+
         // Precompute the set of known canonical formulas to avoid cloning
         // when the derived formula is already known. `generated` tracks
         // formulas produced earlier in THIS expandOneLevel call — necessary
@@ -765,300 +784,141 @@ export class GentzenSystem {
         const known = this._knownFormulas;
         const generated = new Set();
 
-        // Two-step rules (alpha AND, beta OR, modus ponens). Iterate over
-        // the unified source list (steps + fact wrappers).
+        const tryAdd = (candidateKey, fireRule) => {
+            if (known.has(candidateKey) || generated.has(candidateKey)) { return; }
+            generated.add(candidateKey);
+            const sysClone = cloneSystem(this);
+            fireRule(sysClone);
+            newSystems.push(sysClone);
+        };
+
+        // Two-step rules: alpha AND, beta OR, modus ponens, modus tollens,
+        // disjunctive MP, disjunctive syllogism. Iterate over the unified
+        // source list (steps + fact wrappers).
         //
         for (let i = 0; i < sourceCount; i += 1) {
-            const stepI = sourceAt(i);
-            if (stepI.formulas.size !== 1) { continue; }
-            const formulaI = [...stepI.formulas][0];
+            const metaI = sourceMeta[i];
+            if (!metaI) { continue; }
+            const formulaI = metaI.formula;
 
             for (let j = 0; j < sourceCount; j += 1) {
-                const stepJ = sourceAt(j);
-                if (stepJ.formulas.size !== 1) { continue; }
-                const formulaJ = [...stepJ.formulas][0];
+                const metaJ = sourceMeta[j];
+                if (!metaJ) { continue; }
+                const formulaJ = metaJ.formula;
 
-                // Alpha AND: (A ∧ B). Skip i==j: (A ∧ A) is idempotent with A
-                // and just bloats the search space without proving anything new.
+                // Alpha AND and beta OR don't require parsing — they just
+                // concatenate. Skip i==j (idempotent with the input).
                 //
                 if (i !== j) {
-                    const candidateAnd = normalizeFormula(`(${formulaI} ∧ ${formulaJ})`);
-                    if (!known.has(candidateAnd) && !generated.has(candidateAnd)) {
-                        generated.add(candidateAnd);
-                        const sysClone = cloneSystem(this);
-                        sysClone.alphaRule(cloneSourceAt(sysClone, i), cloneSourceAt(sysClone, j), 'and');
-                        newSystems.push(sysClone);
+                    tryAdd(normalizeFormula(`(${formulaI} ∧ ${formulaJ})`), (clone) => {
+                        clone.alphaRule(cloneSourceAt(clone, i), cloneSourceAt(clone, j), 'and');
+                    });
+                    tryAdd(normalizeFormula(`(${formulaI} ∨ ${formulaJ})`), (clone) => {
+                        clone.betaRule(cloneSourceAt(clone, i), cloneSourceAt(clone, j));
+                    });
+                }
+
+                if (metaI.isImplication) {
+                    // Modus ponens: implication's antecedent matches formulaJ.
+                    if (metaI.antNorm === metaJ.formulaNorm) {
+                        tryAdd(metaI.consNorm, (clone) => {
+                            clone.modusPonensRule(cloneSourceAt(clone, i), cloneSourceAt(clone, j));
+                        });
+                    }
+                    // Modus tollens: implication's negated consequent matches formulaJ.
+                    if (metaI.negConsNorm === metaJ.formulaNorm) {
+                        tryAdd(normalizeFormula(astToStringImpl(negate(metaI.antecedent))), (clone) => {
+                            clone.modusTollensRule(cloneSourceAt(clone, i), cloneSourceAt(clone, j));
+                        });
+                    }
+                    // Disjunctive MP: antecedent is a disjunction and formulaJ
+                    // matches either disjunct.
+                    if (metaI.antIsDisjunction &&
+                        (metaJ.formulaNorm === metaI.antLeftNorm ||
+                         metaJ.formulaNorm === metaI.antRightNorm)) {
+                        tryAdd(metaI.consNorm, (clone) => {
+                            clone.disjunctiveModusPonensRule(
+                                cloneSourceAt(clone, i),
+                                cloneSourceAt(clone, j)
+                            );
+                        });
                     }
                 }
 
-                // Beta OR: (A ∨ B). Skip i==j for the same reason (A ∨ A ≡ A).
-                //
-                if (i !== j) {
-                    const candidateOr = normalizeFormula(`(${formulaI} ∨ ${formulaJ})`);
-                    if (!known.has(candidateOr) && !generated.has(candidateOr)) {
-                        generated.add(candidateOr);
-                        const sysClone = cloneSystem(this);
-                        sysClone.betaRule(cloneSourceAt(sysClone, i), cloneSourceAt(sysClone, j));
-                        newSystems.push(sysClone);
+                if (metaI.isDisjunction) {
+                    // Disjunctive syllogism: formulaJ is the negation of one disjunct.
+                    let survivorStr = null;
+                    if (metaJ.formulaNorm === metaI.negLeftNorm) {
+                        survivorStr = metaI.rightStr;
+                    } else if (metaJ.formulaNorm === metaI.negRightNorm) {
+                        survivorStr = metaI.leftStr;
+                    }
+                    if (survivorStr !== null) {
+                        tryAdd(normalizeFormula(survivorStr), (clone) => {
+                            clone.disjunctiveSyllogismRule(
+                                cloneSourceAt(clone, i),
+                                cloneSourceAt(clone, j)
+                            );
+                        });
                     }
                 }
-
-                // Modus ponens: if formula i is an implication whose
-                // antecedent matches formula j, derive the consequent.
-                //
-                try {
-                    const parsedI = parseFormulaFromString(formulaI);
-                    if (isImplication(parsedI)) {
-                        const partsI = getImplicationParts(parsedI);
-                        const antString = astToStringImpl(partsI.antecedent);
-                        if (normalizeFormula(antString) === normalizeFormula(formulaJ)) {
-                            const consequentString = astToStringImpl(partsI.consequent);
-                            const candidateMP = normalizeFormula(consequentString);
-                            if (!known.has(candidateMP) && !generated.has(candidateMP)) {
-                                generated.add(candidateMP);
-                                const sysClone = cloneSystem(this);
-                                sysClone.modusPonensRule(cloneSourceAt(sysClone, i), cloneSourceAt(sysClone, j));
-                                newSystems.push(sysClone);
-                            }
-                        }
-                    }
-                } catch (e) {
-                    _logger.debug(`modus ponens skipped for "${formulaI}", "${formulaJ}": ${e.message}`);
-                }
-
-                // Modus tollens: if formula i is an implication whose negated
-                // consequent matches formula j, derive the negation of the
-                // antecedent. Single-step rule; supersedes the two-step
-                // contraposition + MP chain when both inputs are present.
-                //
-                try {
-                    const parsedI = parseFormulaFromString(formulaI);
-                    if (isImplication(parsedI)) {
-                        const partsI = getImplicationParts(parsedI);
-                        const negConsString = astToStringImpl(negate(partsI.consequent));
-                        if (normalizeFormula(negConsString) === normalizeFormula(formulaJ)) {
-                            const negAntString = astToStringImpl(negate(partsI.antecedent));
-                            const candidateMT = normalizeFormula(negAntString);
-                            if (!known.has(candidateMT) && !generated.has(candidateMT)) {
-                                generated.add(candidateMT);
-                                const sysClone = cloneSystem(this);
-                                sysClone.modusTollensRule(cloneSourceAt(sysClone, i), cloneSourceAt(sysClone, j));
-                                newSystems.push(sysClone);
-                            }
-                        }
-                    }
-                } catch (e) {
-                    _logger.debug(`modus tollens skipped for "${formulaI}", "${formulaJ}": ${e.message}`);
-                }
-
-                // Disjunctive MP: if formula i is an implication whose
-                // antecedent is a disjunction (A ∨ B) and formula j matches
-                // either disjunct, derive the consequent. Bounded by the
-                // number of disjunctive-antecedent implications in scope.
-                //
-                try {
-                    const parsedI = parseFormulaFromString(formulaI);
-                    if (isImplication(parsedI)) {
-                        const partsI = getImplicationParts(parsedI);
-                        if (isDisjunction(partsI.antecedent)) {
-                            const leftDisjunct = normalizeFormula(astToStringImpl(partsI.antecedent.left));
-                            const rightDisjunct = normalizeFormula(astToStringImpl(partsI.antecedent.right));
-                            const formulaJNorm = normalizeFormula(formulaJ);
-                            if (formulaJNorm === leftDisjunct || formulaJNorm === rightDisjunct) {
-                                const consequentString = astToStringImpl(partsI.consequent);
-                                const candidateDMP = normalizeFormula(consequentString);
-                                if (!known.has(candidateDMP) && !generated.has(candidateDMP)) {
-                                    generated.add(candidateDMP);
-                                    const sysClone = cloneSystem(this);
-                                    sysClone.disjunctiveModusPonensRule(
-                                        cloneSourceAt(sysClone, i),
-                                        cloneSourceAt(sysClone, j)
-                                    );
-                                    newSystems.push(sysClone);
-                                }
-                            }
-                        }
-                    }
-                } catch (e) {
-                    _logger.debug(`disjunctive MP skipped for "${formulaI}", "${formulaJ}": ${e.message}`);
-                }
-
-                // Disjunctive syllogism: if formula i is a disjunction (A ∨ B)
-                // and formula j is the negation of one disjunct, derive the
-                // other disjunct.
-                //
-                try {
-                    const parsedI = parseFormulaFromString(formulaI);
-                    if (isDisjunction(parsedI)) {
-                        const negLeftNorm = normalizeFormula(astToStringImpl(negate(parsedI.left)));
-                        const negRightNorm = normalizeFormula(astToStringImpl(negate(parsedI.right)));
-                        const formulaJNorm = normalizeFormula(formulaJ);
-                        let survivor = null;
-                        if (formulaJNorm === negLeftNorm) {
-                            survivor = astToStringImpl(parsedI.right);
-                        } else if (formulaJNorm === negRightNorm) {
-                            survivor = astToStringImpl(parsedI.left);
-                        }
-                        if (survivor !== null) {
-                            const candidateDS = normalizeFormula(survivor);
-                            if (!known.has(candidateDS) && !generated.has(candidateDS)) {
-                                generated.add(candidateDS);
-                                const sysClone = cloneSystem(this);
-                                sysClone.disjunctiveSyllogismRule(
-                                    cloneSourceAt(sysClone, i),
-                                    cloneSourceAt(sysClone, j)
-                                );
-                                newSystems.push(sysClone);
-                            }
-                        }
-                    }
-                } catch (e) {
-                    _logger.debug(`disjunctive syllogism skipped for "${formulaI}", "${formulaJ}": ${e.message}`);
-                }
-
             }
         }
 
-        // Single-step rules (contraposition, double negation). Iterate over
-        // both real steps and fact wrappers.
+        // Single-step rules: contraposition, double-negation intro/elim,
+        // and-elimination L/R.
         //
         for (let i = 0; i < sourceCount; i += 1) {
-            const stepI = sourceAt(i);
-            if (stepI.formulas.size !== 1) { continue; }
-            const formula = [...stepI.formulas][0];
+            const metaI = sourceMeta[i];
+            if (!metaI || !metaI.parsed) { continue; }
 
-            // Contraposition applies only to implications.
-            try {
-                const parsed = parseFormula(formula);
-                if (isImplication(parsed.ast)) {
-                    const parts = getImplicationParts(parsed.ast);
-                    const contraFormula = astToStringImpl(
-                        createImplication(negate(parts.consequent), negate(parts.antecedent))
-                    );
-                    const cKey = normalizeFormula(contraFormula);
-                    if (!known.has(cKey) && !generated.has(cKey)) {
-                        generated.add(cKey);
-                        const sysClone = cloneSystem(this);
-                        sysClone.contrapositionRule(cloneSourceAt(sysClone, i));
-                        newSystems.push(sysClone);
-                    }
-                }
-            } catch (e) {
-                _logger.debug(`contraposition skipped for "${formula}": ${e.message}`);
+            if (metaI.isImplication) {
+                const contraStr = astToStringImpl(
+                    createImplication(negate(metaI.consequent), negate(metaI.antecedent))
+                );
+                tryAdd(normalizeFormula(contraStr), (clone) => {
+                    clone.contrapositionRule(cloneSourceAt(clone, i));
+                });
             }
 
-            try {
-                const parsedForIntro = parseFormulaFromString(formula);
-                const introCandidate = astToStringImpl(negate(negate(parsedForIntro)));
-                const iKey = normalizeFormula(introCandidate);
-                if (!known.has(iKey) && !generated.has(iKey)) {
-                    generated.add(iKey);
-                    const sysClone = cloneSystem(this);
-                    sysClone.doubleNegationRule(cloneSourceAt(sysClone, i), 'introduction');
-                    newSystems.push(sysClone);
-                }
-            } catch (e) {
-                _logger.debug(`double-negation introduction skipped for "${formula}": ${e.message}`);
-            }
-
-            try {
-                const parsedForElim = parseFormulaFromString(formula);
-                if (isNegation(parsedForElim) && isNegation(parsedForElim.operand)) {
-                    const elimCandidate = astToStringImpl(normalizeAST(parsedForElim.operand.operand));
-                    const eKey = normalizeFormula(elimCandidate);
-                    if (!known.has(eKey) && !generated.has(eKey)) {
-                        generated.add(eKey);
-                        const sysClone = cloneSystem(this);
-                        sysClone.doubleNegationRule(cloneSourceAt(sysClone, i), 'elimination');
-                        newSystems.push(sysClone);
-                    }
-                }
-            } catch (e) {
-                _logger.debug(`double-negation elimination skipped for "${formula}": ${e.message}`);
-            }
-
-            // Conjunction elimination: from (A ∧ B), derive A and B as separate
-            // children. Two children per conjunction step (left and right).
+            // Double-negation introduction applies to any parseable formula.
             //
-            try {
-                const parsedConj = parseFormulaFromString(formula);
-                if (isConjunction(parsedConj)) {
-                    const leftCandidate = astToStringImpl(parsedConj.left);
-                    const lKey = normalizeFormula(leftCandidate);
-                    if (!known.has(lKey) && !generated.has(lKey)) {
-                        generated.add(lKey);
-                        const sysClone = cloneSystem(this);
-                        sysClone.andEliminationL(cloneSourceAt(sysClone, i));
-                        newSystems.push(sysClone);
-                    }
-                    const rightCandidate = astToStringImpl(parsedConj.right);
-                    const rKey = normalizeFormula(rightCandidate);
-                    if (!known.has(rKey) && !generated.has(rKey)) {
-                        generated.add(rKey);
-                        const sysClone = cloneSystem(this);
-                        sysClone.andEliminationR(cloneSourceAt(sysClone, i));
-                        newSystems.push(sysClone);
-                    }
-                }
-            } catch (e) {
-                _logger.debug(`and-elimination skipped for "${formula}": ${e.message}`);
+            const introStr = astToStringImpl(negate(negate(metaI.parsed)));
+            tryAdd(normalizeFormula(introStr), (clone) => {
+                clone.doubleNegationRule(cloneSourceAt(clone, i), 'introduction');
+            });
+
+            if (metaI.isDoubleNegated) {
+                tryAdd(normalizeFormula(metaI.dnElimStr), (clone) => {
+                    clone.doubleNegationRule(cloneSourceAt(clone, i), 'elimination');
+                });
+            }
+
+            if (metaI.isConjunction) {
+                tryAdd(normalizeFormula(metaI.leftStr), (clone) => {
+                    clone.andEliminationL(cloneSourceAt(clone, i));
+                });
+                tryAdd(normalizeFormula(metaI.rightStr), (clone) => {
+                    clone.andEliminationR(cloneSourceAt(clone, i));
+                });
             }
         }
 
         // Disjunction elimination (∨E / proof by cases): three-premise rule.
-        // From (A ∨ B), (A → C), (B → C), derive C.
+        // From (A ∨ B), (A → C), (B → C), derive C. O(n³) worst case; perf
+        // safeguards are (1) precomputed metadata above, (2) outer loop
+        // restricted to disjunctions, inner loops to implications, and
+        // (3) early-prune on consequent literal match before antecedent check.
         //
-        // O(n³) in source count in the worst case. Three perf safeguards:
-        //   1. Precompute parsed AST + canonical strings for each source ONCE.
-        //   2. Outer loop scans only disjunctions; inner loops only implications.
-        //   3. Early-prune in the innermost loop: literal-string match on
-        //      normalized consequent BEFORE any deeper validation. If the two
-        //      implications don't agree on consequent, skip — saves the
-        //      antecedent-matching work.
-        //
-        const sourceMeta = new Array(sourceCount);
-        for (let s = 0; s < sourceCount; s += 1) {
-            const src = sourceAt(s);
-            if (src.formulas.size !== 1) {
-                sourceMeta[s] = null;
-                continue;
-            }
-            const f = [...src.formulas][0];
-            try {
-                const ast = parseFormulaFromString(f);
-                if (isDisjunction(ast)) {
-                    sourceMeta[s] = {
-                        kind: 'disj',
-                        leftNorm: normalizeFormula(astToStringImpl(ast.left)),
-                        rightNorm: normalizeFormula(astToStringImpl(ast.right))
-                    };
-                } else if (isImplication(ast)) {
-                    const parts = getImplicationParts(ast);
-                    sourceMeta[s] = {
-                        kind: 'impl',
-                        antNorm: normalizeFormula(astToStringImpl(parts.antecedent)),
-                        consNorm: normalizeFormula(astToStringImpl(parts.consequent)),
-                        consStr: astToStringImpl(parts.consequent)
-                    };
-                } else {
-                    sourceMeta[s] = { kind: 'other' };
-                }
-            } catch (e) {
-                sourceMeta[s] = null;
-            }
-        }
-
         for (let d = 0; d < sourceCount; d += 1) {
             const meta_d = sourceMeta[d];
-            if (!meta_d || meta_d.kind !== 'disj') { continue; }
+            if (!meta_d || !meta_d.isDisjunction) { continue; }
             const leftNorm = meta_d.leftNorm;
             const rightNorm = meta_d.rightNorm;
 
             for (let a = 0; a < sourceCount; a += 1) {
                 const meta_a = sourceMeta[a];
-                if (!meta_a || meta_a.kind !== 'impl') { continue; }
-                // Match impl_a against either disjunct.
-                //
+                if (!meta_a || !meta_a.isImplication) { continue; }
                 const aMatchesLeft = meta_a.antNorm === leftNorm;
                 const aMatchesRight = meta_a.antNorm === rightNorm;
                 if (!aMatchesLeft && !aMatchesRight) { continue; }
@@ -1066,30 +926,20 @@ export class GentzenSystem {
                 for (let b = 0; b < sourceCount; b += 1) {
                     if (b === a) { continue; }
                     const meta_b = sourceMeta[b];
-                    if (!meta_b || meta_b.kind !== 'impl') { continue; }
-                    // Early-prune: consequents must literal-match. This is
-                    // the cheapest filter and rules out the vast majority of
-                    // candidate triples before the antecedent check below.
-                    //
+                    if (!meta_b || !meta_b.isImplication) { continue; }
                     if (meta_a.consNorm !== meta_b.consNorm) { continue; }
-                    // The two implication antecedents must cover both disjuncts.
-                    //
                     const bMatchesOther = aMatchesLeft
                         ? meta_b.antNorm === rightNorm
                         : meta_b.antNorm === leftNorm;
                     if (!bMatchesOther) { continue; }
 
-                    // Triple matches. Check dedup before cloning.
-                    //
-                    if (known.has(meta_a.consNorm) || generated.has(meta_a.consNorm)) { continue; }
-                    generated.add(meta_a.consNorm);
-                    const sysClone = cloneSystem(this);
-                    sysClone.orEliminationRule(
-                        cloneSourceAt(sysClone, d),
-                        cloneSourceAt(sysClone, a),
-                        cloneSourceAt(sysClone, b)
-                    );
-                    newSystems.push(sysClone);
+                    tryAdd(meta_a.consNorm, (clone) => {
+                        clone.orEliminationRule(
+                            cloneSourceAt(clone, d),
+                            cloneSourceAt(clone, a),
+                            cloneSourceAt(clone, b)
+                        );
+                    });
                 }
             }
         }

@@ -1,21 +1,19 @@
 // formulaAST.js
 // Abstract Syntax Tree definitions and operations for logical formulas
 
+import { CANONICAL, CANONICAL_TO_SYMBOL } from './operators.js';
+
 // AST Node Types
 export const ASTNodeType = {
     ATOM: 'atom',
-    UNARY: 'unary', 
+    UNARY: 'unary',
     BINARY: 'binary'
 };
 
-// Operator Types
-export const OperatorType = {
-    NOT: 'not',
-    AND: 'and',
-    OR: 'or', 
-    IMPLIES: 'implies',
-    IFF: 'iff'
-};
+// Canonical operator names (e.g. OperatorType.AND === 'and'). Sourced from
+// utilities/operators.js so adding an operator is a one-file change.
+//
+export const OperatorType = CANONICAL;
 
 // Base AST Node class
 export class ASTNode {
@@ -59,14 +57,7 @@ export class BinaryNode extends ASTNode {
     }
     
     toString() {
-        const opSymbols = {
-            'and': '∧',
-            'or': '∨', 
-            'implies': '→',
-            'iff': '↔'
-        };
-        
-        const symbol = opSymbols[this.operator] || this.operator;
+        const symbol = CANONICAL_TO_SYMBOL[this.operator] || this.operator;
         return `(${this.left.toString()} ${symbol} ${this.right.toString()})`;
     }
 }
@@ -79,38 +70,13 @@ export function astToString(ast) {
     return ast.toString();
 }
 
-// Get all atomic propositions (variables) from AST
-export function getAtoms(ast) {
-    const atoms = new Set();
-    
-    function collectAtoms(node) {
-        if (!node) return;
-        
-        switch (node.type) {
-            case ASTNodeType.ATOM:
-                atoms.add(node.name);
-                break;
-            case ASTNodeType.UNARY:
-                collectAtoms(node.operand);
-                break;
-            case ASTNodeType.BINARY:
-                collectAtoms(node.left);
-                collectAtoms(node.right);
-                break;
-        }
-    }
-    
-    collectAtoms(ast);
-    return Array.from(atoms);
-}
-
-// Walk AST with visitor pattern
+// Walk AST in pre-order, calling `visitor` on every node. For side-effect
+// traversals (collecting, validating). For reductions use foldAST; for
+// transformations use mapAST.
+//
 export function walkAST(ast, visitor) {
     if (!ast) return;
-    
-    // Pre-order traversal: visit node first, then children
     visitor(ast);
-    
     switch (ast.type) {
         case ASTNodeType.UNARY:
             walkAST(ast.operand, visitor);
@@ -119,8 +85,64 @@ export function walkAST(ast, visitor) {
             walkAST(ast.left, visitor);
             walkAST(ast.right, visitor);
             break;
-        // ATOM nodes have no children
     }
+}
+
+// Reduce an AST to a single value. Each handler receives the node and the
+// already-reduced results from its children. Post-order: children fold before
+// the parent handler runs. Used by getDepth, countNodes, etc.
+//
+export function foldAST(ast, { onAtom, onUnary, onBinary }) {
+    if (!ast) return undefined;
+    switch (ast.type) {
+        case ASTNodeType.ATOM:
+            return onAtom(ast);
+        case ASTNodeType.UNARY:
+            return onUnary(ast, foldAST(ast.operand, { onAtom, onUnary, onBinary }));
+        case ASTNodeType.BINARY:
+            return onBinary(
+                ast,
+                foldAST(ast.left, { onAtom, onUnary, onBinary }),
+                foldAST(ast.right, { onAtom, onUnary, onBinary })
+            );
+        default:
+            return undefined;
+    }
+}
+
+// Transform an AST. Children are transformed first (post-order). Each handler
+// receives the original node plus the transformed children and returns the
+// replacement node. Omit a handler to use the default reconstruction
+// (atoms pass through; unary/binary rebuild with the same operator).
+//
+export function mapAST(ast, { onAtom, onUnary, onBinary } = {}) {
+    if (!ast) return ast;
+    switch (ast.type) {
+        case ASTNodeType.ATOM:
+            return onAtom ? onAtom(ast) : ast;
+        case ASTNodeType.UNARY: {
+            const operand = mapAST(ast.operand, { onAtom, onUnary, onBinary });
+            return onUnary ? onUnary(ast, operand) : new UnaryNode(ast.operator, operand);
+        }
+        case ASTNodeType.BINARY: {
+            const left = mapAST(ast.left, { onAtom, onUnary, onBinary });
+            const right = mapAST(ast.right, { onAtom, onUnary, onBinary });
+            return onBinary ? onBinary(ast, left, right) : new BinaryNode(ast.operator, left, right);
+        }
+        default:
+            return ast;
+    }
+}
+
+// Get all atomic propositions (variables) from AST
+export function getAtoms(ast) {
+    const atoms = new Set();
+    walkAST(ast, (node) => {
+        if (node.type === ASTNodeType.ATOM) {
+            atoms.add(node.name);
+        }
+    });
+    return Array.from(atoms);
 }
 
 // Check if two ASTs are structurally equivalent
@@ -157,42 +179,32 @@ export function astEquals(ast1, ast2) {
 // remain distinct after this pass.
 //
 export function normalizeAST(ast) {
-    if (!ast) return ast;
-
-    switch (ast.type) {
-        case ASTNodeType.ATOM:
-            return ast;
-
-        case ASTNodeType.UNARY:
+    return mapAST(ast, {
+        onUnary: (node, operand) => {
             // Double negation elimination: ~~A → A.
             //
-            if (ast.operator === OperatorType.NOT &&
-                ast.operand.type === ASTNodeType.UNARY &&
-                ast.operand.operator === OperatorType.NOT) {
-                return normalizeAST(ast.operand.operand);
+            if (node.operator === OperatorType.NOT &&
+                operand && operand.type === ASTNodeType.UNARY &&
+                operand.operator === OperatorType.NOT) {
+                return operand.operand;
             }
-            return new UnaryNode(ast.operator, normalizeAST(ast.operand));
-
-        case ASTNodeType.BINARY: {
-            const left = normalizeAST(ast.left);
-            const right = normalizeAST(ast.right);
-            if (ast.operator === OperatorType.AND ||
-                ast.operator === OperatorType.OR ||
-                ast.operator === OperatorType.IFF) {
+            return new UnaryNode(node.operator, operand);
+        },
+        onBinary: (node, left, right) => {
+            if (node.operator === OperatorType.AND ||
+                node.operator === OperatorType.OR ||
+                node.operator === OperatorType.IFF) {
                 // Sort operands by canonical-string form. Stable, deterministic.
                 //
                 const ls = astToString(left);
                 const rs = astToString(right);
                 if (rs.localeCompare(ls) < 0) {
-                    return new BinaryNode(ast.operator, right, left);
+                    return new BinaryNode(node.operator, right, left);
                 }
             }
-            return new BinaryNode(ast.operator, left, right);
+            return new BinaryNode(node.operator, left, right);
         }
-
-        default:
-            return ast;
-    }
+    });
 }
 
 // Check if AST represents an implication (A → B)
@@ -272,34 +284,20 @@ export function createAtom(name) {
 
 // Get the depth of an AST (maximum nesting level)
 export function getDepth(ast) {
-    if (!ast) return 0;
-    
-    switch (ast.type) {
-        case ASTNodeType.ATOM:
-            return 1;
-        case ASTNodeType.UNARY:
-            return 1 + getDepth(ast.operand);
-        case ASTNodeType.BINARY:
-            return 1 + Math.max(getDepth(ast.left), getDepth(ast.right));
-        default:
-            return 0;
-    }
+    return foldAST(ast, {
+        onAtom: () => 1,
+        onUnary: (_node, d) => 1 + d,
+        onBinary: (_node, l, r) => 1 + Math.max(l, r)
+    }) ?? 0;
 }
 
 // Count total number of nodes in AST
 export function countNodes(ast) {
-    if (!ast) return 0;
-    
-    switch (ast.type) {
-        case ASTNodeType.ATOM:
-            return 1;
-        case ASTNodeType.UNARY:
-            return 1 + countNodes(ast.operand);
-        case ASTNodeType.BINARY:
-            return 1 + countNodes(ast.left) + countNodes(ast.right);
-        default:
-            return 0;
-    }
+    return foldAST(ast, {
+        onAtom: () => 1,
+        onUnary: (_node, c) => 1 + c,
+        onBinary: (_node, l, r) => 1 + l + r
+    }) ?? 0;
 }
 
 // Validate AST structure

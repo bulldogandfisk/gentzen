@@ -2,26 +2,28 @@ import fs from 'fs-extra';
 import yaml from 'yaml';
 import { validateFormulaSyntax } from './utilities/formulaParser.js';
 
-// Validate a scenario file.
-// @param {string} scenarioPath - Path to YAML scenario file.
-// @returns {Promise<{isValid: boolean, errors: string[], warnings: string[], summary: string}>}
+// Read and parse a scenario YAML file. Throws if the file can't be read
+// or the YAML is invalid. Separate from validateScenario so callers can
+// parse once and validate, extract atoms, and build a system off the same
+// parsed object.
 //
-export async function validateScenario(scenarioPath) {
+export async function readScenarioFile(scenarioPath) {
+    const content = await fs.readFile(scenarioPath, 'utf8');
+    const scenario = yaml.parse(content);
+    if (!scenario || typeof scenario !== 'object') {
+        throw new Error(`Scenario file "${scenarioPath}" is empty or does not contain a valid YAML object`);
+    }
+    return scenario;
+}
+
+// Validate a parsed scenario object. Returns { isValid, errors, warnings,
+// summary }. `options.source` is an optional label (typically the file
+// path) prepended to error messages where useful — omit for pure object
+// inputs.
+//
+export function validateScenario(scenario, options = {}) {
     const errors = [];
     const warnings = [];
-
-    let scenario;
-    try {
-        const content = await fs.readFile(scenarioPath, 'utf8');
-        scenario = yaml.parse(content);
-    } catch (error) {
-        return {
-            isValid: false,
-            errors: [`Failed to parse scenario file: ${error.message}`],
-            warnings: [],
-            summary: 'File parsing failed'
-        };
-    }
 
     if (!scenario || typeof scenario !== 'object') {
         return {

@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { runGentzenReasoning, displayStory } from '../main.js';
+import { runGentzenReasoning, displayResults } from '../main.js';
 import { updateConfig } from '../utilities/config.js';
 import { LogLevel } from '../utilities/logger.js';
 
@@ -21,6 +21,7 @@ const results = await runGentzenReasoning(
     { customResolvers }
 );
 
-displayStory(results, {
+displayResults(results, {
+    mode: 'narrative',
     description: 'Double negation elimination and contraposition in action.'
 });

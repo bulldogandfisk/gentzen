@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { runGentzenReasoning, displayStory } from '../main.js';
+import { runGentzenReasoning, displayResults } from '../main.js';
 import { updateConfig } from '../utilities/config.js';
 import { LogLevel } from '../utilities/logger.js';
 
@@ -13,7 +13,8 @@ const resolversPath = join(WD, './resolvers');
 // First run prints the narrative so you know what is being measured.
 //
 const firstRun = await runGentzenReasoning(scenarioPath, { resolversPath });
-displayStory(firstRun, {
+displayResults(firstRun, {
+    mode: 'narrative',
     description: 'Performance demo — first run shown for context, then four more for timing.'
 });
 

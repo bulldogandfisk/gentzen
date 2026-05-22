@@ -1,8 +1,4 @@
-import { readFile } from 'node:fs/promises';
-import YAML from 'yaml';
 import { GentzenSystem } from './gentzen.js';
-import { parseFormula } from './gentzen.js';
-import { getAtoms } from './utilities/formulaAST.js';
 import { createLogger } from './utilities/logger.js';
 import { getConfigSection } from './utilities/config.js';
 import { addFormulaAtomsToSet } from './utilities/formulaUtils.js';
@@ -53,19 +49,17 @@ export function collectReferencedAtoms(scenario) {
     return referencedAtoms;
 }
 
-// Load a Gentzen scenario from YAML and build the proof system
-// @param {string} yamlPath - Path to YAML scenario file
+// Build a GentzenSystem from a parsed scenario object.
+// @param {Object} scenario - Parsed scenario (use readScenarioFile to load).
 // @param {Object} factMap - Pre-resolved fact map (name → boolean), as returned by runFactResolvers()
+// @returns {{system, targets, referencedAtoms, propositions}}
 //
-export async function loadGentzenScenario(yamlPath, factMap = {}, options = {}) {
-    // Create logger for this operation
+export function buildGentzenSystem(scenario, factMap = {}, options = {}) {
     const logConfig = getConfigSection('logging');
     const logger = createLogger(logConfig);
 
-    const fileContent = await readFile(yamlPath, 'utf8');
-    const scenario = YAML.parse(fileContent);
     if (!scenario || typeof scenario !== 'object') {
-        throw new Error(`Scenario file "${yamlPath}" is empty or does not contain a valid YAML object`);
+        throw new Error('buildGentzenSystem requires a parsed scenario object');
     }
 
     const referencedAtoms = collectReferencedAtoms(scenario);

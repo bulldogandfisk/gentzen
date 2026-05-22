@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { runGentzenReasoning, displayStory } from '../main.js';
+import { runGentzenReasoning, displayResults } from '../main.js';
 import { updateConfig } from '../utilities/config.js';
 import { LogLevel } from '../utilities/logger.js';
 import { enterpriseResolvers } from './resolvers/enterpriseResolvers.js';
@@ -18,7 +18,8 @@ const results = await runGentzenReasoning(
     { customResolvers: enterpriseResolvers }
 );
 
-displayStory(results, {
+displayResults(results, {
+    mode: 'narrative',
     description: 'Every logical rule in one enterprise scenario.'
 });
 

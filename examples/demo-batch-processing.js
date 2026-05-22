@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { runGentzenReasoning, displayStory } from '../main.js';
+import { runGentzenReasoning, displayResults } from '../main.js';
 import { updateConfig } from '../utilities/config.js';
 import { LogLevel } from '../utilities/logger.js';
 
@@ -36,7 +36,7 @@ for (const scenario of scenarios) {
     const options = scenario.resolversPath ? { resolversPath: scenario.resolversPath } : {};
     try {
         const result = await runGentzenReasoning(scenario.path, options);
-        displayStory(result, { description: scenario.name });
+        displayResults(result, { mode: 'narrative', description: scenario.name });
         totalProven += result.summary.provenTargets;
         totalTargets += result.summary.totalTargets;
     } catch (error) {

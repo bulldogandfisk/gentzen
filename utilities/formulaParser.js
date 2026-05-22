@@ -2,10 +2,10 @@
 // Recursive descent parser for logical formulas
 
 import { TokenType, tokenize } from './formulaLexer.js';
-import { 
-    AtomNode, 
-    UnaryNode, 
-    BinaryNode, 
+import {
+    AtomNode,
+    UnaryNode,
+    BinaryNode,
     OperatorType,
     createAtom,
     negate,
@@ -14,6 +14,7 @@ import {
     createImplication,
     createEquivalence
 } from './formulaAST.js';
+import { CANONICAL } from './operators.js';
 
 // Parse error class
 export class ParseError extends Error {
@@ -89,7 +90,7 @@ export class FormulaParser {
     parseEquivalence() {
         let left = this.parseImplication();
         
-        while (this.match(TokenType.OPERATOR, 'iff')) {
+        while (this.match(TokenType.OPERATOR, CANONICAL.IFF)) {
             this.advance(); // consume iff operator
             const right = this.parseImplication();
             left = createEquivalence(left, right);
@@ -103,10 +104,10 @@ export class FormulaParser {
     parseImplication() {
         const left = this.parseDisjunction();
         
-        if (this.match(TokenType.OPERATOR, 'implies')) {
+        if (this.match(TokenType.OPERATOR, CANONICAL.IMPLIES)) {
             this.advance(); // consume implies operator
             // Right associative: A → B → C becomes A → (B → C)
-            const right = this.parseImplication(); 
+            const right = this.parseImplication();
             return createImplication(left, right);
         }
         
@@ -118,7 +119,7 @@ export class FormulaParser {
     parseDisjunction() {
         let left = this.parseConjunction();
         
-        while (this.match(TokenType.OPERATOR, 'or')) {
+        while (this.match(TokenType.OPERATOR, CANONICAL.OR)) {
             this.advance(); // consume or operator
             const right = this.parseConjunction();
             left = createDisjunction(left, right);
@@ -132,7 +133,7 @@ export class FormulaParser {
     parseConjunction() {
         let left = this.parseNegation();
         
-        while (this.match(TokenType.OPERATOR, 'and')) {
+        while (this.match(TokenType.OPERATOR, CANONICAL.AND)) {
             this.advance(); // consume and operator
             const right = this.parseNegation();
             left = createConjunction(left, right);
@@ -144,7 +145,7 @@ export class FormulaParser {
     // Parse negation (~A, ~~A, right associative)
     // negation ::= ('~' | 'NOT' | '!')* primary
     parseNegation() {
-        if (this.match(TokenType.OPERATOR, 'not')) {
+        if (this.match(TokenType.OPERATOR, CANONICAL.NOT)) {
             this.advance(); // consume not operator
             // Right associative: ~ ~ A becomes ~(~A)
             const operand = this.parseNegation();

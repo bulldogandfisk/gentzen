@@ -229,26 +229,25 @@ export function runGentzenReasoning(
 ): Promise<ReasoningResults | AbortedResults>;
 
 export interface DisplayOptions {
+    /**
+     * Output style:
+     *  - 'concise'   : flat diagnostic dump (default). For debugging.
+     *  - 'narrative' : story-shaped summary. For demos and operator-facing UIs.
+     */
+    mode?: 'concise' | 'narrative';
+    /** Concise mode: include resolver-discovery dump and raw step table. */
     verbose?: boolean;
-    logger?: unknown;
-}
-
-export function displayResults(results: ReasoningResults, options?: DisplayOptions): void;
-
-export interface DisplayStoryOptions {
-    /** One-line caption shown beneath the scenario name. */
+    /** Narrative mode: one-line caption shown beneath the scenario name. */
     description?: string;
     /** Logger to write to. Defaults to a fresh logger derived from config. */
     logger?: unknown;
-    /** Show raw formula strings in derivation output. Default true. */
-    showRawFormulas?: boolean;
 }
 
 /**
- * Print a narrative summary of a reasoning result.
- *
- * Five sections: header, propositions, facts, inference steps, target verdicts.
- * Use this for demos and operator-facing UIs. Use `displayResults` for the
- * flat diagnostic dump intended for debugging.
+ * Print a reasoning result. Mode selects the format; the underlying data
+ * shape is the same. See {@link DisplayOptions}.
  */
-export function displayStory(results: ReasoningResults, options?: DisplayStoryOptions): void;
+export function displayResults(
+    results: ReasoningResults | AbortedResults,
+    options?: DisplayOptions
+): void;

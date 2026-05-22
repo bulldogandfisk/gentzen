@@ -1,44 +1,18 @@
 // formulaLexer.js
 // Tokenizer for logical formulas with operator normalization
 
+import { ALIAS_TO_CANONICAL } from './operators.js';
+
 // Token types
 export const TokenType = {
     IDENTIFIER: 'IDENTIFIER',
-    OPERATOR: 'OPERATOR', 
+    OPERATOR: 'OPERATOR',
     LPAREN: 'LPAREN',
     RPAREN: 'RPAREN',
     EOF: 'EOF'
 };
 
-// Operator mappings - normalize various representations to canonical forms
-const OPERATOR_MAPPINGS = {
-    // Conjunction (AND)
-    '∧': 'and',
-    'AND': 'and', 
-    '&': 'and',
-    
-    // Disjunction (OR)
-    '∨': 'or',
-    'OR': 'or',
-    '|': 'or',
-    
-    // Implication
-    '→': 'implies',
-    'IMPLIES': 'implies',
-    '->': 'implies',
-    '=>': 'implies',
-    
-    // Equivalence (IFF)
-    '↔': 'iff',
-    'IFF': 'iff',
-    '<->': 'iff',
-    '<=>': 'iff',
-    
-    // Negation (NOT)
-    '~': 'not',
-    'NOT': 'not',
-    '!': 'not'
-};
+const OPERATOR_MAPPINGS = ALIAS_TO_CANONICAL;
 
 // Token class
 export class Token {

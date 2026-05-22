@@ -2,16 +2,22 @@
 
 import { join } from 'node:path';
 import test from 'ava';
-import { loadGentzenScenario, runFactResolvers } from '../../loadFromYaml.js';
+import { buildGentzenSystem, runFactResolvers } from '../../loadFromYaml.js';
+import { readScenarioFile } from '../../validator.js';
 import { allMockResolvers } from '../scenarios/test-resolvers/mockResolvers.js';
 
 const testDir = import.meta.dirname;
 const testScenariosPath = join(testDir, '../scenarios/test-scenarios');
 
-test('loadGentzenScenario - minimal scenario', async t => {
+async function loadAndBuild(scenarioPath, factMap = {}) {
+    const scenario = await readScenarioFile(scenarioPath);
+    return buildGentzenSystem(scenario, factMap);
+}
+
+test('buildGentzenSystem - minimal scenario', async t => {
         const scenarioPath = join(testScenariosPath, 'minimal.yaml');
         const factMap = await runFactResolvers(allMockResolvers);
-        const { system, targets, referencedAtoms } = await loadGentzenScenario(scenarioPath, factMap);
+        const { system, targets, referencedAtoms } = await loadAndBuild(scenarioPath, factMap);
 
         t.true(system !== null);
         t.true(Array.isArray(targets));
@@ -20,10 +26,10 @@ test('loadGentzenScenario - minimal scenario', async t => {
         t.true(referencedAtoms.has('SimpleAction'));
 });
 
-test('loadGentzenScenario - all rules scenario', async t => {
+test('buildGentzenSystem - all rules scenario', async t => {
         const scenarioPath = join(testScenariosPath, 'all-rules.yaml');
         const factMap = await runFactResolvers(allMockResolvers);
-        const { system, targets, referencedAtoms } = await loadGentzenScenario(scenarioPath, factMap);
+        const { system, targets, referencedAtoms } = await loadAndBuild(scenarioPath, factMap);
 
         t.true(system !== null);
         t.true(Array.isArray(targets));
@@ -32,10 +38,10 @@ test('loadGentzenScenario - all rules scenario', async t => {
         t.true(referencedAtoms.has('UserHasVisa'));
 });
 
-test('loadGentzenScenario - missing facts scenario', async t => {
+test('buildGentzenSystem - missing facts scenario', async t => {
         const scenarioPath = join(testScenariosPath, 'missing-facts.yaml');
         const factMap = await runFactResolvers(allMockResolvers);
-        const { system, targets, referencedAtoms } = await loadGentzenScenario(scenarioPath, factMap);
+        const { system, targets, referencedAtoms } = await loadAndBuild(scenarioPath, factMap);
 
         t.true(system !== null);
         t.true(Array.isArray(targets));
@@ -45,21 +51,21 @@ test('loadGentzenScenario - missing facts scenario', async t => {
         t.true(referencedAtoms.has('NonExistentFact2'));
 });
 
-test('loadGentzenScenario - invalid syntax handling', async t => {
+test('buildGentzenSystem - invalid syntax handling', async t => {
         const scenarioPath = join(testScenariosPath, 'invalid-syntax.yaml');
         const factMap = await runFactResolvers(allMockResolvers);
 
         // This should not throw an error, but should handle invalid syntax gracefully
-        const { system, targets } = await loadGentzenScenario(scenarioPath, factMap);
+        const { system, targets } = await loadAndBuild(scenarioPath, factMap);
 
         t.true(system !== null);
         t.true(Array.isArray(targets));
 });
 
-test('loadGentzenScenario - empty fact resolvers', async t => {
+test('buildGentzenSystem - empty fact resolvers', async t => {
         const scenarioPath = join(testScenariosPath, 'minimal.yaml');
-        const { system, targets } = await loadGentzenScenario(scenarioPath, {});
-        
+        const { system, targets } = await loadAndBuild(scenarioPath, {});
+
         t.true(system !== null);
         t.true(Array.isArray(targets));
         t.true(system.missingFacts.size > 0);
@@ -97,9 +103,9 @@ test('runFactResolvers - non-function resolvers', async t => {
             TestFact5: 0,
             TestFact6: 1
         };
-        
+
         const factMap = await runFactResolvers(resolvers);
-        
+
         t.is(factMap.TestFact1, true);
         t.is(factMap.TestFact2, false);
         t.is(factMap.TestFact3, true);
@@ -110,41 +116,40 @@ test('runFactResolvers - non-function resolvers', async t => {
 
 test('runFactResolvers - empty resolvers', async t => {
         const factMap = await runFactResolvers({});
-        
+
         t.is(Object.keys(factMap).length, 0);
 });
 
-test('loadGentzenScenario - fact resolution integration', async t => {
+test('buildGentzenSystem - fact resolution integration', async t => {
         const scenarioPath = join(testScenariosPath, 'minimal.yaml');
         const factMap = await runFactResolvers({
             UserWantsEuropeanFlight: () => true,
             SomeOtherFact: () => false
         });
 
-        const { system } = await loadGentzenScenario(scenarioPath, factMap);
+        const { system } = await loadAndBuild(scenarioPath, factMap);
 
         t.true(system.isFactAvailable('UserWantsEuropeanFlight'));
         t.false(system.isFactAvailable('SomeOtherFact'));
 });
 
-test('loadGentzenScenario - step processing with available facts', async t => {
+test('buildGentzenSystem - step processing with available facts', async t => {
         const scenarioPath = join(testScenariosPath, 'minimal.yaml');
         const factMap = await runFactResolvers({
             UserWantsEuropeanFlight: () => true
         });
 
-        const { system } = await loadGentzenScenario(scenarioPath, factMap);
+        const { system } = await loadAndBuild(scenarioPath, factMap);
 
         t.true(system.steps.length > 0);
         t.true(system.facts.has('UserWantsEuropeanFlight'));
 });
 
-test('loadGentzenScenario - nonexistent file', async t => {
+test('readScenarioFile - nonexistent file rejects', async t => {
         const scenarioPath = join(testScenariosPath, 'nonexistent.yaml');
 
         await t.throwsAsync(
-            async () => await loadGentzenScenario(scenarioPath, {}),
+            () => readScenarioFile(scenarioPath),
             { instanceOf: Error }
         );
 });
-
