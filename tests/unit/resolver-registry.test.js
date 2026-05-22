@@ -52,11 +52,22 @@ test('discoverResolvers - recursive directory discovery', async t => {
 
 test('discoverResolvers - invalid path handling', async t => {
     const result = await discoverResolvers('/invalid/path/that/does/not/exist');
-    
+
     t.is(result.loadedFiles.length, 0);
     t.is(result.totalResolvers, 0);
     t.is(Object.keys(result.resolvers).length, 0);
     t.true(Array.isArray(result.errors));
+});
+
+test('discoverResolvers - glob throw is caught and returns empty result', async t => {
+    // An unclosed glob bracket character class makes fast-glob throw with
+    // EBADF instead of returning []. Exercises the inner catch in
+    // discoverJSFiles (resolverDiscovery.js:20-25).
+    //
+    const result = await discoverResolvers('/[unclosed-bracket');
+
+    t.is(result.totalResolvers, 0);
+    t.is(result.loadedFiles.length, 0);
 });
 
 test('discoverResolvers - empty directory', async t => {

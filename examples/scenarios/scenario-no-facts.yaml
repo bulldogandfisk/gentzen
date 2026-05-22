@@ -1,78 +1,80 @@
 # yaml-language-server: $schema=../../schemas/scenario.schema.json
 
 propositions:
-  # Action atoms and intermediate conclusions.
-  - BookFlight
-  - BookHotel
-  - BookOperaTickets
-  - BookLouvreReservation
-  - StrongCandidateHotel
-  - PetFriendlyHotel
-  - RewardsUpgrade
-  - EuropeanPackageDeal
+  # This scenario runs with NO resolvers (see demo-no-resolvers.js). Every atom
+  # here is therefore stipulated; steps whose `from:` references an unresolved
+  # atom will be skipped at scenario load.
+  - BookFlight                                        # stipulated atom (engine: 'asserted')
+  - BookHotel                                         # stipulated atom (engine: 'asserted')
+  - BookOperaTickets                                  # stipulated atom (engine: 'asserted')
+  - BookLouvreReservation                             # stipulated atom (engine: 'asserted')
+  - StrongCandidateHotel                              # stipulated atom (engine: 'asserted')
+  - PetFriendlyHotel                                  # stipulated atom (engine: 'asserted')
+  - RewardsUpgrade                                    # stipulated atom (engine: 'asserted')
+  - EuropeanPackageDeal                               # stipulated atom (engine: 'asserted')
 
   # Stipulated business rules, declared as compound propositions. Modus ponens
   # fires automatically during proof search when antecedents become available.
-  - ((UserWantsEuropeanFlight ∧ UserHasVisa) → BookFlight)
-  - (TravelingWithDog → PetFriendlyHotel)
-  - ((UserNeedsPool ∧ UserHasHotelRewards) → StrongCandidateHotel)
-  - (UserHasBudget → BookHotel)
-  - (UserHasOperaInterest → BookOperaTickets)
-  - ((UserWantsCulturalActivities ∧ WantsLouvreVisit) → BookLouvreReservation)
-  - (((BookFlight ∨ BookHotel) ∨ BookOperaTickets) → EuropeanPackageDeal)
-  - (TravelingWithDog ↔ PetFriendlyHotel)
+  - ((UserWantsEuropeanFlight ∧ UserHasVisa) → BookFlight)                 # stipulated rule
+  - (TravelingWithDog → PetFriendlyHotel)                                  # stipulated rule
+  - ((UserNeedsPool ∧ UserHasHotelRewards) → StrongCandidateHotel)         # stipulated rule
+  - (UserHasBudget → BookHotel)                                            # stipulated rule
+  - (UserHasOperaInterest → BookOperaTickets)                              # stipulated rule
+  - ((UserWantsCulturalActivities ∧ WantsLouvreVisit) → BookLouvreReservation)  # stipulated rule
+  - (((BookFlight ∨ BookHotel) ∨ BookOperaTickets) → EuropeanPackageDeal)  # stipulated rule
+  - (TravelingWithDog ↔ PetFriendlyHotel)                                  # stipulated equivalence
 
 steps:
   # STEP 1: (UserWantsEuropeanFlight ∧ UserHasVisa)
   - rule: alpha
     subtype: and
     from:
-      - UserWantsEuropeanFlight
-      - UserHasVisa
+      - UserWantsEuropeanFlight                       # no resolver — step skipped
+      - UserHasVisa                                   # no resolver — step skipped
 
   # STEP 2: (UserNeedsPool ∧ UserHasHotelRewards)
   - rule: alpha
     subtype: and
     from:
-      - UserNeedsPool
-      - UserHasHotelRewards
+      - UserNeedsPool                                 # no resolver — step skipped
+      - UserHasHotelRewards                           # no resolver — step skipped
 
   # STEP 3: (UserWantsCulturalActivities ∧ WantsLouvreVisit)
   - rule: alpha
     subtype: and
     from:
-      - UserWantsCulturalActivities
-      - WantsLouvreVisit
+      - UserWantsCulturalActivities                   # no resolver — step skipped
+      - WantsLouvreVisit                              # no resolver — step skipped
 
   # STEP 4: Beta => (BookFlight ∨ BookHotel)
   - rule: beta
     from:
-      - BookFlight
-      - BookHotel
+      - BookFlight                                    # stipulated atom (proposition)
+      - BookHotel                                     # stipulated atom (proposition)
 
   # STEP 5: Beta => ((BookFlight ∨ BookHotel) ∨ BookOperaTickets)
   - rule: beta
     from:
-      - (BookFlight ∨ BookHotel)
-      - BookOperaTickets
+      - (BookFlight ∨ BookHotel)                      # from step 4 (beta)
+      - BookOperaTickets                              # stipulated atom (proposition)
 
   # STEP 6: Contraposition => (~BookHotel → ~UserHasBudget)
   - rule: contraposition
     from:
-      - (UserHasBudget → BookHotel)
+      - (UserHasBudget → BookHotel)                   # stipulated rule (proposition)
 
   # STEP 7: Double Negation introduction => ~~UserHasVisa
   - rule: doubleNegation
     subtype: introduction
     from:
-      - UserHasVisa
+      - UserHasVisa                                   # no resolver — step skipped
 
 targets:
-  - (UserWantsEuropeanFlight ∧ UserHasVisa)
-  - ((UserWantsEuropeanFlight ∧ UserHasVisa) → BookFlight)
-  - ((BookFlight ∨ BookHotel) ∨ BookOperaTickets)
-  - (UserHasBudget → BookHotel)
-  - (~BookHotel → ~UserHasBudget)
-  - ~~UserHasVisa
-  - EuropeanPackageDeal
-  - (TravelingWithDog ↔ PetFriendlyHotel)
+  - (UserWantsEuropeanFlight ∧ UserHasVisa)           # step 1 was skipped — target blocked
+  - ((UserWantsEuropeanFlight ∧ UserHasVisa) → BookFlight)  # stipulated rule (engine: 'asserted')
+  - ((BookFlight ∨ BookHotel) ∨ BookOperaTickets)     # from step 5 (beta)
+  - (UserHasBudget → BookHotel)                       # stipulated rule (engine: 'asserted')
+  - (~BookHotel → ~UserHasBudget)                     # from step 6 (contraposition)
+  - ~~UserHasVisa                                     # step 7 was skipped — target blocked
+  - EuropeanPackageDeal                               # stipulated atom (engine: 'asserted')
+  - (TravelingWithDog ↔ PetFriendlyHotel)             # stipulated equivalence (engine: 'asserted')

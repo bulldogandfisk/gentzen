@@ -160,6 +160,229 @@ test('narrative - empty propositions/steps falls back to gray placeholder', t =>
     t.true(all.includes('0/0 targets proven'), 'zero-tally rendered');
 });
 
+// Aborted-result rendering — concise mode (default).
+//
+test('concise - aborted result emits SCENARIO ABORTED via logger.error', t => {
+    const aborted = {
+        aborted: true,
+        reason: 'resolver_error',
+        resolverName: 'BadResolver',
+        cause: 'Sensor offline',
+        scenarioPath: '/tmp/synthetic.yaml'
+    };
+    const capture = captureLogger();
+    displayResults(aborted, { logger: capture.logger });
+    const all = capture.lines.join('\n');
+    t.true(all.includes('Scenario: synthetic.yaml'));
+    t.true(all.includes('SCENARIO ABORTED'));
+    t.true(all.includes('BadResolver'));
+    t.true(all.includes('Sensor offline'));
+});
+
+test('narrative - aborted result emits bar+description+abort block', t => {
+    const aborted = {
+        aborted: true,
+        reason: 'resolver_error',
+        resolverName: 'BadResolver',
+        cause: 'Sensor offline',
+        scenarioPath: '/tmp/synthetic.yaml'
+    };
+    const capture = captureLogger();
+    displayResults(aborted, {
+        mode: 'narrative',
+        description: 'unit test abort',
+        logger: capture.logger
+    });
+    const all = capture.lines.join('\n');
+    t.true(all.includes('Scenario:'));
+    t.true(all.includes('unit test abort'));
+    t.true(all.includes('SCENARIO ABORTED'));
+    t.true(all.includes('BadResolver'));
+    t.true(all.includes('Sensor offline'));
+});
+
+// ruleLabel: hit every origin including the synthetic-unknown default arm.
+//
+test('narrative - ruleLabel renders a label for every rule origin', t => {
+    const mk = (origin, ruleType, formula) => ({
+        origin, ruleType, from: [], formulas: new Set([formula])
+    });
+    const steps = [
+        mk('AlphaRule', 'and', '(A ∧ B)'),
+        mk('BetaRule', 'or', '(A ∨ B)'),
+        mk('ContrapositionRule', 'contraposition', '(~B → ~A)'),
+        mk('DoubleNegationRule', 'doubleNegIntro', '~~A'),
+        mk('DoubleNegationRule', 'doubleNegElim', 'A'),
+        mk('ModusPonensRule', 'modusPonens', 'B'),
+        mk('ModusTollensRule', 'modusTollens', '~A'),
+        mk('DisjunctiveModusPonensRule', 'disjunctiveMP', 'C'),
+        mk('DisjunctiveSyllogismRule', 'disjunctiveSyllogism', 'B'),
+        mk('AndEliminationRule', 'andElimL', 'A'),
+        mk('AndEliminationRule', 'andElimR', 'B'),
+        mk('OrEliminationRule', 'orElim', 'C'),
+        mk('SyntheticUnknownOrigin', 'whatever', 'X')
+    ];
+    const stub = {
+        scenarioPath: '/tmp/synthetic.yaml',
+        propositions: [],
+        targets: [],
+        availableFacts: [],
+        missingFacts: [],
+        skippedSteps: [],
+        factResolutions: {},
+        resolverErrors: [],
+        verboseInfo: null,
+        summary: { totalTargets: 0, provenTargets: 0, availableFacts: 0, missingFacts: 0, skippedSteps: 0, loadedFiles: [], totalResolvers: 0 },
+        system: { steps, facts: new Set() }
+    };
+    const capture = captureLogger();
+    displayResults(stub, { mode: 'narrative', logger: capture.logger });
+    const all = capture.lines.join('\n');
+
+    for (const label of [
+        'alpha-AND', 'beta-OR', 'contraposition',
+        'doubleNeg-intro', 'doubleNeg-elim',
+        'modus-ponens', 'modus-tollens',
+        'disj-MP', 'disj-syll',
+        'andElim-L', 'andElim-R', 'orElim',
+        'SyntheticUnknownOrigin'
+    ]) {
+        t.true(all.includes(label), `expected label "${label}" in narrative output`);
+    }
+});
+
+// derivationLabel - inference derivation with multi-step path.
+//
+test('narrative - inference target with 3-step path labels as "via proof search (3 steps)"', t => {
+    const stub = {
+        scenarioPath: '/tmp/synthetic.yaml',
+        propositions: [],
+        targets: [{
+            formula: 'Z',
+            proven: true,
+            derivation: 'inference',
+            missingFacts: [],
+            path: [
+                { rule: 'modusPonens', premises: ['(A → B)', 'A'], conclusion: 'B', sources: [] },
+                { rule: 'modusPonens', premises: ['(B → C)', 'B'], conclusion: 'C', sources: [] },
+                { rule: 'modusPonens', premises: ['(C → Z)', 'C'], conclusion: 'Z', sources: [] }
+            ]
+        }],
+        availableFacts: [], missingFacts: [], skippedSteps: [],
+        factResolutions: {}, resolverErrors: [], verboseInfo: null,
+        summary: { totalTargets: 1, provenTargets: 1, availableFacts: 0, missingFacts: 0, skippedSteps: 0, loadedFiles: [], totalResolvers: 0 },
+        system: { steps: [], facts: new Set() }
+    };
+    const capture = captureLogger();
+    displayResults(stub, { mode: 'narrative', logger: capture.logger });
+    const all = capture.lines.join('\n');
+    t.true(all.includes('via proof search (3 steps)'));
+});
+
+test('narrative - inference target with empty path labels as "via proof search"', t => {
+    const stub = {
+        scenarioPath: '/tmp/synthetic.yaml',
+        propositions: [],
+        targets: [{
+            formula: 'Z',
+            proven: true,
+            derivation: 'inference',
+            missingFacts: [],
+            path: []
+        }],
+        availableFacts: [], missingFacts: [], skippedSteps: [],
+        factResolutions: {}, resolverErrors: [], verboseInfo: null,
+        summary: { totalTargets: 1, provenTargets: 1, availableFacts: 0, missingFacts: 0, skippedSteps: 0, loadedFiles: [], totalResolvers: 0 },
+        system: { steps: [], facts: new Set() }
+    };
+    const capture = captureLogger();
+    displayResults(stub, { mode: 'narrative', logger: capture.logger });
+    const all = capture.lines.join('\n');
+    t.true(all.includes('via proof search'));
+    t.false(all.includes('(0 step'));
+});
+
+// derivationLabel - derived target with a malformed target.formula falls
+// through to the outer catch and returns the "derived during YAML step
+// execution" label.
+//
+test('narrative - derived target with malformed formula falls back to YAML-step label', t => {
+    const stub = {
+        scenarioPath: '/tmp/synthetic.yaml',
+        propositions: [],
+        targets: [{
+            formula: '(unparseable ∧',
+            proven: true,
+            derivation: 'derived',
+            missingFacts: [],
+            path: []
+        }],
+        availableFacts: [], missingFacts: [], skippedSteps: [],
+        factResolutions: {}, resolverErrors: [], verboseInfo: null,
+        summary: { totalTargets: 1, provenTargets: 1, availableFacts: 0, missingFacts: 0, skippedSteps: 0, loadedFiles: [], totalResolvers: 0 },
+        system: { steps: [{ origin: 'Proposition', ruleType: 'fact', from: [], formulas: new Set(['A']) }], facts: new Set() }
+    };
+    const capture = captureLogger();
+    displayResults(stub, { mode: 'narrative', logger: capture.logger });
+    const all = capture.lines.join('\n');
+    t.true(all.includes('derived during YAML step execution'));
+});
+
+// derivationLabel - derived target where the matching step has a malformed
+// formula alongside a valid one. The inner try/catch must skip the bad
+// formula and continue the search.
+//
+test('narrative - derived target tolerates malformed formula inside a step', t => {
+    const stub = {
+        scenarioPath: '/tmp/synthetic.yaml',
+        propositions: [],
+        targets: [{
+            formula: 'Z',
+            proven: true,
+            derivation: 'derived',
+            missingFacts: [],
+            path: []
+        }],
+        availableFacts: [], missingFacts: [], skippedSteps: [],
+        factResolutions: {}, resolverErrors: [], verboseInfo: null,
+        summary: { totalTargets: 1, provenTargets: 1, availableFacts: 0, missingFacts: 0, skippedSteps: 0, loadedFiles: [], totalResolvers: 0 },
+        system: {
+            steps: [
+                { origin: 'ModusPonensRule', ruleType: 'modusPonens', from: [], formulas: new Set(['(bad ∧', 'Z']) }
+            ],
+            facts: new Set()
+        }
+    };
+    const capture = captureLogger();
+    displayResults(stub, { mode: 'narrative', logger: capture.logger });
+    const all = capture.lines.join('\n');
+    t.true(all.includes('derived at step #1'));
+});
+
+// derivationLabel - derived target whose formula does NOT match any step.
+//
+test('narrative - derived target with no matching step falls back to YAML-step label', t => {
+    const stub = {
+        scenarioPath: '/tmp/synthetic.yaml',
+        propositions: [],
+        targets: [{
+            formula: 'NotInSystem',
+            proven: true,
+            derivation: 'derived',
+            missingFacts: [],
+            path: []
+        }],
+        availableFacts: [], missingFacts: [], skippedSteps: [],
+        factResolutions: {}, resolverErrors: [], verboseInfo: null,
+        summary: { totalTargets: 1, provenTargets: 1, availableFacts: 0, missingFacts: 0, skippedSteps: 0, loadedFiles: [], totalResolvers: 0 },
+        system: { steps: [], facts: new Set() }
+    };
+    const capture = captureLogger();
+    displayResults(stub, { mode: 'narrative', logger: capture.logger });
+    const all = capture.lines.join('\n');
+    t.true(all.includes('derived during YAML step execution'));
+});
+
 test('narrative - resolver errors surface in the Facts section', t => {
     const stubResults = {
         scenarioPath: '/tmp/synthetic.yaml',

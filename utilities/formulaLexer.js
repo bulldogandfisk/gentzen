@@ -76,40 +76,24 @@ export class FormulaLexer {
         return new Token(TokenType.IDENTIFIER, result, start_pos);
     }
     
-    // Read a multi-character operator
+    // Read a multi-character operator. Caller must guarantee
+    // startsOperator() returned true at this position; startsOperator
+    // already enforces the word-boundary rule for alphabetic operators.
+    //
     readOperator() {
         const start_pos = this.position;
-        let result = '';
-        
-        // Try to match longest possible operator first
         const remaining = this.input.slice(this.position);
 
         for (const op of SORTED_OPERATOR_KEYS) {
             if (remaining.startsWith(op)) {
-                // For alphabetic operators, require a word boundary
-                //
-                if (/[A-Za-z]/.test(op[0])) {
-                    const nextChar = remaining[op.length];
-                    if (nextChar && /[A-Za-z0-9_]/.test(nextChar)) {
-                        continue;
-                    }
-                }
-                result = op;
-                // Advance position by operator length
                 for (let i = 0; i < op.length; i++) {
                     this.advance();
                 }
-                break;
+                return new Token(TokenType.OPERATOR, OPERATOR_MAPPINGS[op], start_pos);
             }
         }
-        
-        if (!result) {
-            throw new Error(`Unknown operator starting with '${this.current_char}' at position ${this.position}`);
-        }
-        
-        // Normalize the operator
-        const canonical = OPERATOR_MAPPINGS[result];
-        return new Token(TokenType.OPERATOR, canonical, start_pos);
+
+        throw new Error(`Unknown operator starting with '${this.current_char}' at position ${this.position}`);
     }
     
     // Check if current position starts an operator

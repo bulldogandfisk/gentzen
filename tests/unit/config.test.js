@@ -65,6 +65,19 @@ test('updateConfig - out-of-range number throws', t => {
     }, { message: /validation failed/i });
 });
 
+test('updateConfig - boolean field with non-boolean value throws', t => {
+    t.throws(() => {
+        updateConfig({ logging: { enableColors: 'true' } });
+    }, { message: /Expected boolean/i });
+});
+
+test('updateConfig - number below minimum throws', t => {
+    // maxProofDepth has min: 1; 0 is below.
+    t.throws(() => {
+        updateConfig({ reasoning: { maxProofDepth: 0 } });
+    }, { message: /below minimum/i });
+});
+
 test('onConfigChange - listener fires on update', t => {
     let called = false;
     let receivedConfig = null;

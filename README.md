@@ -1,5 +1,7 @@
 # Gentzen — Auditable Rule-Based Reasoning for Agent Decision Gates
 
+An engine for agents to determine what is the case in the world before acting, and to produce a step-by-step proof of that determination that survives compliance audit and post-hoc review.
+
 ## What this is
 
 Agents take real actions. Before each action, you need an answer to: *given the current state of the world, which of these actions are justified?*

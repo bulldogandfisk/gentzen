@@ -2,7 +2,16 @@
 //
 
 import test from 'ava';
-import { Logger, LogLevel, createLogger } from '../../utilities/logger.js';
+import {
+    Logger,
+    LogLevel,
+    createLogger,
+    logger as defaultLogger,
+    debug,
+    info,
+    warn,
+    error
+} from '../../utilities/logger.js';
 
 // Helper to capture log output
 //
@@ -256,6 +265,32 @@ test('configure - updates level at runtime', t => {
 
 // Console routing without custom outputFunction
 //
+
+// Convenience exports — debug/info/warn/error route to the default logger.
+//
+test('convenience exports - debug/info/warn/error reach the default logger', t => {
+    const messages = [];
+    const original = defaultLogger.config;
+    defaultLogger.configure({
+        level: LogLevel.DEBUG,
+        outputFunction: (level, message) => messages.push({ level, message })
+    });
+
+    try {
+        debug('d');
+        info('i');
+        warn('w');
+        error('e');
+
+        t.is(messages.length, 4);
+        t.is(messages[0].level, LogLevel.DEBUG);
+        t.is(messages[1].level, LogLevel.INFO);
+        t.is(messages[2].level, LogLevel.WARN);
+        t.is(messages[3].level, LogLevel.ERROR);
+    } finally {
+        defaultLogger.config = original;
+    }
+});
 
 test('Logger routes to console methods without outputFunction', t => {
     const logger = new Logger({

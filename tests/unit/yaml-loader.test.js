@@ -2,7 +2,7 @@
 
 import { join } from 'node:path';
 import test from 'ava';
-import { buildGentzenSystem, runFactResolvers } from '../../loadFromYaml.js';
+import { buildGentzenSystem, runFactResolvers, ScenarioAbortedError } from '../../loadFromYaml.js';
 import { readScenarioFile } from '../../validator.js';
 import { allMockResolvers } from '../scenarios/test-resolvers/mockResolvers.js';
 
@@ -143,6 +143,78 @@ test('buildGentzenSystem - step processing with available facts', async t => {
 
         t.true(system.steps.length > 0);
         t.true(system.facts.has('UserWantsEuropeanFlight'));
+});
+
+test('buildGentzenSystem - rejects null and non-object input', t => {
+        t.throws(() => buildGentzenSystem(null), { message: /parsed scenario object/i });
+        t.throws(() => buildGentzenSystem('string is not a scenario'),
+            { message: /parsed scenario object/i });
+});
+
+test('buildGentzenSystem - step with malformed formula records parse_error', t => {
+        const scenario = {
+                targets: ['B'],
+                steps: [
+                        { rule: 'modusPonens', from: ['(A ∧', 'B'] }
+                ]
+        };
+        const { system } = buildGentzenSystem(scenario, {});
+
+        t.is(system.skippedSteps.length, 1);
+        t.is(system.skippedSteps[0].reason, 'parse_error');
+});
+
+test('buildGentzenSystem - alpha step without subtype defaults to "and"', t => {
+        const scenario = {
+                propositions: ['A', 'B'],
+                targets: ['(A ∧ B)'],
+                steps: [
+                        { rule: 'alpha', from: ['A', 'B'] }  // no subtype
+                ]
+        };
+        const { system } = buildGentzenSystem(scenario, {});
+        t.true(system.steps.some(s => s.origin === 'AlphaRule'));
+});
+
+test('buildGentzenSystem - doubleNegation step without subtype defaults to introduction', t => {
+        const scenario = {
+                propositions: ['A'],
+                targets: ['~~A'],
+                steps: [
+                        { rule: 'doubleNegation', from: ['A'] }  // no subtype
+                ]
+        };
+        const { system } = buildGentzenSystem(scenario, {});
+        t.true(system.steps.some(s => s.ruleType === 'doubleNegIntro'));
+});
+
+test('buildGentzenSystem - scenario without targets array falls back to empty', t => {
+        const scenario = { propositions: ['A'] };  // no targets
+        const { targets } = buildGentzenSystem(scenario, {});
+        t.deepEqual(targets, []);
+});
+
+test('ScenarioAbortedError - non-Error cause uses String(cause)', t => {
+        const err = new ScenarioAbortedError('FooResolver', 'sensor unreachable');
+        t.is(err.resolverName, 'FooResolver');
+        t.true(err.message.includes('sensor unreachable'));
+});
+
+test('buildGentzenSystem - rule precondition failure is caught and warned', t => {
+        // modusPonens requires the first input to be an implication; we feed
+        // two atomic propositions, which will pass the resolution check (they
+        // are declared propositions) and then trip the rule's precondition.
+        //
+        const scenario = {
+                propositions: ['A', 'B'],
+                targets: ['B'],
+                steps: [
+                        { rule: 'modusPonens', from: ['A', 'B'] }
+                ]
+        };
+        // Should not throw; the rule's error is caught internally.
+        //
+        t.notThrows(() => buildGentzenSystem(scenario, {}));
 });
 
 test('readScenarioFile - nonexistent file rejects', async t => {

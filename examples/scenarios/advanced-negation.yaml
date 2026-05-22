@@ -6,31 +6,31 @@
 propositions:
   # Business rules only. Action atoms (AllowAccess, GrantFullPermissions)
   # are derived via MP. DenyAccess and RequireAuth are unused vocabulary.
-  - (UserIsAdmin → AllowAccess)
-  - ((UserIsAdmin ∧ SystemSecure) → GrantFullPermissions)
+  - (UserIsAdmin → AllowAccess)                              # stipulated rule
+  - ((UserIsAdmin ∧ SystemSecure) → GrantFullPermissions)    # stipulated rule
 
 steps:
   # Step 1: Apply double negation elimination (~~DatabaseConnected -> DatabaseConnected)
   - rule: doubleNegation
     subtype: elimination
     from:
-      - ~~DatabaseConnected
+      - ~~DatabaseConnected                  # resolver DatabaseConnected → double-negated literal
 
   # Step 2: Apply contraposition to get (~AllowAccess -> ~UserIsAdmin)
   - rule: contraposition
     from:
-      - (UserIsAdmin → AllowAccess)
+      - (UserIsAdmin → AllowAccess)          # stipulated rule (from propositions)
 
   # Step 3: Combine admin status with security so MP fires on the compound proposition
   - rule: alpha
     subtype: and
     from:
-      - UserIsAdmin
-      - SystemSecure
+      - UserIsAdmin                          # resolver
+      - SystemSecure                         # resolver
 
 targets:
-  - DatabaseConnected                    # From double negation elimination
-  - AllowAccess                          # From MP on (UserIsAdmin → AllowAccess)
-  - GrantFullPermissions                 # From MP on the compound proposition
-  - (~AllowAccess → ~UserIsAdmin)        # From contraposition
-  - (UserIsAdmin ∧ SystemSecure)         # Conjunction
+  - DatabaseConnected                        # from step 1 (double-negation elimination)
+  - AllowAccess                              # MP: resolver UserIsAdmin + first stipulated rule
+  - GrantFullPermissions                     # MP: step 3 + second stipulated rule
+  - (~AllowAccess → ~UserIsAdmin)            # from step 2 (contraposition)
+  - (UserIsAdmin ∧ SystemSecure)             # from step 3 (alpha-AND)

@@ -107,6 +107,30 @@ test('clearNormalizeCache - clears cached entries', t => {
     t.is(result, 'CacheTest1');
 });
 
+// cacheSize falsy (0 / unset) falls back to the built-in 1000 default.
+//
+test('normalizeFormula - falsy cacheSize falls back to default limit', async t => {
+    const { updateConfig, getConfig } = await import('../../utilities/config.js');
+    const original = getConfig().performance.cacheSize;
+
+    try {
+        clearNormalizeCache();
+        updateConfig({ performance: { cacheSize: 0 } });
+
+        // Cache must still function — fallback to 1000 is internal but
+        // observable in that normalizeFormula doesn't throw and still caches.
+        //
+        const a = normalizeFormula('FallbackA');
+        const b = normalizeFormula('FallbackB');
+        t.is(a, 'FallbackA');
+        t.is(b, 'FallbackB');
+        t.is(normalizeFormula('FallbackA'), 'FallbackA');
+    } finally {
+        updateConfig({ performance: { cacheSize: original } });
+        clearNormalizeCache();
+    }
+});
+
 // LRU eviction: a recently-accessed entry survives a wave of new inserts
 // that would push out a FIFO-style oldest entry.
 //

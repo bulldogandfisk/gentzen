@@ -24,16 +24,16 @@ propositions:
   # explicitly guard against by reporting derivation: 'asserted'.
 
   # Business rules: stipulated implications.
-  - (((CustomerIdentityVerified ∧ CustomerInGoodStanding) ∧ (PaymentMethodValid ∧ SufficientFunds)) → ProcessOrder)
-  - (HighRiskTransaction → ApplyFraudHold)
-  - (TransactionExceedsThreshold → InitiateAMLCheck)
-  - ((SystemUnderHighLoad ∧ PerformanceDegraded) → ScaleInfrastructure)
-  - (((CustomerIdentityVerified ∧ CustomerInGoodStanding) ∧ (InventoryAvailable ∧ ShippingCapacityAvailable)) → (ProcessOrder ∧ SendConfirmationEmail))
-  - ((~PrimarySystemsOnline ∨ ~DatabaseConnected) → (ActivateFailover ∨ TriggerMaintenanceMode))
+  - (((CustomerIdentityVerified ∧ CustomerInGoodStanding) ∧ (PaymentMethodValid ∧ SufficientFunds)) → ProcessOrder)  # stipulated rule
+  - (HighRiskTransaction → ApplyFraudHold)                                  # stipulated rule
+  - (TransactionExceedsThreshold → InitiateAMLCheck)                        # stipulated rule
+  - ((SystemUnderHighLoad ∧ PerformanceDegraded) → ScaleInfrastructure)     # stipulated rule
+  - (((CustomerIdentityVerified ∧ CustomerInGoodStanding) ∧ (InventoryAvailable ∧ ShippingCapacityAvailable)) → (ProcessOrder ∧ SendConfirmationEmail))  # stipulated rule
+  - ((~PrimarySystemsOnline ∨ ~DatabaseConnected) → (ActivateFailover ∨ TriggerMaintenanceMode))  # stipulated rule
 
   # Business equivalences, declared as propositions.
-  - ((CustomerIdentityVerified ∧ CustomerInGoodStanding) ↔ (PaymentMethodValid ∧ SufficientFunds))
-  - (SystemHealthy ↔ (PrimarySystemsOnline ∧ DatabaseConnected))
+  - ((CustomerIdentityVerified ∧ CustomerInGoodStanding) ↔ (PaymentMethodValid ∧ SufficientFunds))  # stipulated equivalence
+  - (SystemHealthy ↔ (PrimarySystemsOnline ∧ DatabaseConnected))            # stipulated equivalence
 
 steps:
   # ========================================================================
@@ -44,50 +44,50 @@ steps:
   - rule: alpha
     subtype: and
     from:
-      - CustomerIdentityVerified
-      - CustomerInGoodStanding
+      - CustomerIdentityVerified                      # resolver
+      - CustomerInGoodStanding                        # resolver
 
   # STEP 2: Payment Method Validation
   - rule: alpha
     subtype: and
     from:
-      - PaymentMethodValid
-      - SufficientFunds
+      - PaymentMethodValid                            # resolver
+      - SufficientFunds                               # resolver
 
   # STEP 3: Inventory Readiness Check
   - rule: alpha
     subtype: and
     from:
-      - InventoryAvailable
-      - ShippingCapacityAvailable
+      - InventoryAvailable                            # resolver
+      - ShippingCapacityAvailable                     # resolver
 
   # STEP 4: System Health Foundation
   - rule: alpha
     subtype: and
     from:
-      - PrimarySystemsOnline
-      - DatabaseConnected
+      - PrimarySystemsOnline                          # resolver
+      - DatabaseConnected                             # resolver
 
   # STEP 5: System Load Conjunction
   - rule: alpha
     subtype: and
     from:
-      - SystemUnderHighLoad
-      - PerformanceDegraded
+      - SystemUnderHighLoad                           # resolver
+      - PerformanceDegraded                           # resolver
 
   # STEP 6: Customer + Payment combined (matches the ProcessOrder rule's antecedent)
   - rule: alpha
     subtype: and
     from:
-      - (CustomerIdentityVerified ∧ CustomerInGoodStanding)
-      - (PaymentMethodValid ∧ SufficientFunds)
+      - (CustomerIdentityVerified ∧ CustomerInGoodStanding)  # from step 1 (alpha-AND)
+      - (PaymentMethodValid ∧ SufficientFunds)               # from step 2 (alpha-AND)
 
   # STEP 7: Customer + Inventory combined (matches the workflow rule's antecedent)
   - rule: alpha
     subtype: and
     from:
-      - (CustomerIdentityVerified ∧ CustomerInGoodStanding)
-      - (InventoryAvailable ∧ ShippingCapacityAvailable)
+      - (CustomerIdentityVerified ∧ CustomerInGoodStanding)  # from step 1 (alpha-AND)
+      - (InventoryAvailable ∧ ShippingCapacityAvailable)     # from step 3 (alpha-AND)
 
   # ========================================================================
   # SECTION 2: ALTERNATIVE PATHWAYS (Beta Rule - OR Logic)
@@ -96,20 +96,20 @@ steps:
   # STEP 8: Payment Processing Alternatives
   - rule: beta
     from:
-      - ChargePayment
-      - EscrowFunds
+      - ChargePayment                                 # no resolver — step skipped
+      - EscrowFunds                                   # no resolver — step skipped
 
   # STEP 9: Order Resolution Pathways
   - rule: beta
     from:
-      - (ChargePayment ∨ EscrowFunds)
-      - RequireManualReview
+      - (ChargePayment ∨ EscrowFunds)                 # from step 8 (if it fires)
+      - RequireManualReview                           # no resolver — step skipped
 
   # STEP 10: System Recovery Options
   - rule: beta
     from:
-      - ActivateFailover
-      - TriggerMaintenanceMode
+      - ActivateFailover                              # action atom — no resolver, no upstream derivation; step skipped
+      - TriggerMaintenanceMode                        # action atom — no resolver, no upstream derivation; step skipped
 
   # ========================================================================
   # SECTION 3: CONTRAPOSITION (Logical Inversion)
@@ -118,12 +118,12 @@ steps:
   # STEP 11: Risk Assessment via Contraposition on the stipulated rule
   - rule: contraposition
     from:
-      - (HighRiskTransaction → ApplyFraudHold)
+      - (HighRiskTransaction → ApplyFraudHold)        # stipulated rule (proposition)
 
   # STEP 12: Compliance Verification via Contraposition
   - rule: contraposition
     from:
-      - (TransactionExceedsThreshold → InitiateAMLCheck)
+      - (TransactionExceedsThreshold → InitiateAMLCheck)  # stipulated rule (proposition)
 
   # ========================================================================
   # SECTION 4: DOUBLE NEGATION
@@ -133,13 +133,13 @@ steps:
   - rule: doubleNegation
     subtype: elimination
     from:
-      - ~~CustomerInGoodStanding
+      - ~~CustomerInGoodStanding                      # resolver CustomerInGoodStanding → double-negated literal
 
   # STEP 14: Risk Flag Clarification
   - rule: doubleNegation
     subtype: introduction
     from:
-      - SystemUnderHighLoad
+      - SystemUnderHighLoad                           # resolver
 
 # ----------------------------------------------------------------------------
 # TARGETS: Per-Target Verdicts
@@ -149,48 +149,48 @@ steps:
 
 targets:
   # Conjunction Targets
-  - (CustomerIdentityVerified ∧ CustomerInGoodStanding)
-  - (PaymentMethodValid AND SufficientFunds)
-  - (InventoryAvailable & ShippingCapacityAvailable)
-  - (PrimarySystemsOnline ∧ DatabaseConnected)
+  - (CustomerIdentityVerified ∧ CustomerInGoodStanding)        # from step 1 (alpha-AND)
+  - (PaymentMethodValid AND SufficientFunds)                   # from step 2 (alpha-AND)
+  - (InventoryAvailable & ShippingCapacityAvailable)           # from step 3 (alpha-AND)
+  - (PrimarySystemsOnline ∧ DatabaseConnected)                 # from step 4 (alpha-AND)
 
   # Business rule (implication) targets
-  - (HighRiskTransaction → ApplyFraudHold)
-  - (TransactionExceedsThreshold IMPLIES InitiateAMLCheck)
-  - (((CustomerIdentityVerified ∧ CustomerInGoodStanding) ∧ (PaymentMethodValid ∧ SufficientFunds)) → ProcessOrder)
+  - (HighRiskTransaction → ApplyFraudHold)                                  # stipulated rule (engine: 'asserted')
+  - (TransactionExceedsThreshold IMPLIES InitiateAMLCheck)                  # stipulated rule (engine: 'asserted')
+  - (((CustomerIdentityVerified ∧ CustomerInGoodStanding) ∧ (PaymentMethodValid ∧ SufficientFunds)) → ProcessOrder)  # stipulated rule (engine: 'asserted')
 
   # Disjunction Targets
-  - (ChargePayment ∨ EscrowFunds)
-  - ((ChargePayment ∨ EscrowFunds) ∨ RequireManualReview)
-  - (ActivateFailover | TriggerMaintenanceMode)
+  - (ChargePayment ∨ EscrowFunds)                              # step 8 skipped (no resolvers for disjuncts)
+  - ((ChargePayment ∨ EscrowFunds) ∨ RequireManualReview)      # step 9 skipped
+  - (ActivateFailover | TriggerMaintenanceMode)                # MP via emergency rule (if antecedent disjunction true)
 
   # Contraposition Targets
-  - (~ApplyFraudHold → ~HighRiskTransaction)
-  - (~InitiateAMLCheck → ~TransactionExceedsThreshold)
+  - (~ApplyFraudHold → ~HighRiskTransaction)                   # from step 11 (contraposition)
+  - (~InitiateAMLCheck → ~TransactionExceedsThreshold)         # from step 12 (contraposition)
 
   # Double Negation Targets
-  - CustomerInGoodStanding
-  - ~~SystemUnderHighLoad
+  - CustomerInGoodStanding                                     # resolver (also from step 13 via ~~elim)
+  - ~~SystemUnderHighLoad                                      # from step 14 (double-negation introduction)
 
   # Equivalence Targets
-  - ((CustomerIdentityVerified ∧ CustomerInGoodStanding) ↔ (PaymentMethodValid ∧ SufficientFunds))
-  - (SystemHealthy <-> (PrimarySystemsOnline ∧ DatabaseConnected))
+  - ((CustomerIdentityVerified ∧ CustomerInGoodStanding) ↔ (PaymentMethodValid ∧ SufficientFunds))  # stipulated equivalence (engine: 'asserted')
+  - (SystemHealthy <-> (PrimarySystemsOnline ∧ DatabaseConnected))                                  # stipulated equivalence (engine: 'asserted')
 
   # Complex business workflow Targets
-  - ((CustomerIdentityVerified ∧ CustomerInGoodStanding) ∧ (InventoryAvailable ∧ ShippingCapacityAvailable))
-  - (ProcessOrder ∧ SendConfirmationEmail)
-  - (((CustomerIdentityVerified ∧ CustomerInGoodStanding) ∧ (InventoryAvailable ∧ ShippingCapacityAvailable)) → (ProcessOrder ∧ SendConfirmationEmail))
+  - ((CustomerIdentityVerified ∧ CustomerInGoodStanding) ∧ (InventoryAvailable ∧ ShippingCapacityAvailable))  # from step 7 (alpha-AND)
+  - (ProcessOrder ∧ SendConfirmationEmail)                                  # MP: step 7 + workflow rule
+  - (((CustomerIdentityVerified ∧ CustomerInGoodStanding) ∧ (InventoryAvailable ∧ ShippingCapacityAvailable)) → (ProcessOrder ∧ SendConfirmationEmail))  # stipulated rule (engine: 'asserted')
 
   # Emergency Response Targets
-  - (~PrimarySystemsOnline ∨ ~DatabaseConnected)
-  - (ActivateFailover ∨ TriggerMaintenanceMode)
-  - ((~PrimarySystemsOnline ∨ ~DatabaseConnected) → (ActivateFailover ∨ TriggerMaintenanceMode))
+  - (~PrimarySystemsOnline ∨ ~DatabaseConnected)               # requires negation of a resolver atom (likely blocked)
+  - (ActivateFailover ∨ TriggerMaintenanceMode)                # MP via emergency rule (if antecedent disjunction true)
+  - ((~PrimarySystemsOnline ∨ ~DatabaseConnected) → (ActivateFailover ∨ TriggerMaintenanceMode))  # stipulated rule (engine: 'asserted')
 
   # Business Action Targets (these will report derivation='asserted' or 'inference'
   # depending on whether they're trivially declared or derived via MP)
-  - ProcessOrder
-  - RequireManualReview
-  - ApplyFraudHold
-  - InitiateAMLCheck
-  - ScaleInfrastructure
-  - SendConfirmationEmail
+  - ProcessOrder                                               # MP: step 6 + ProcessOrder rule
+  - RequireManualReview                                        # no resolver, no rule produces it — blocked
+  - ApplyFraudHold                                             # MP: resolver HighRiskTransaction + stipulated rule
+  - InitiateAMLCheck                                           # MP: resolver TransactionExceedsThreshold + stipulated rule
+  - ScaleInfrastructure                                        # MP: step 5 + ScaleInfrastructure rule
+  - SendConfirmationEmail                                      # ∧-elim from (ProcessOrder ∧ SendConfirmationEmail), itself MP from step 7

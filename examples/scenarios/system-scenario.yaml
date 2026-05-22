@@ -1,29 +1,29 @@
 # yaml-language-server: $schema=../../schemas/scenario.schema.json
 
 propositions:
-  - SystemAlert
-  - PerformMaintenance
-  - SendNotification
-  - ScheduleBackup
-  - ((SystemHealthy ∧ DatabaseConnected) → SystemAlert)
-  - (BackupCompleted → ScheduleBackup)
+  - SystemAlert                                       # stipulated atom (also derivable by MP via the rule below)
+  - PerformMaintenance                                # stipulated atom (no rule — engine reports 'asserted')
+  - SendNotification                                  # stipulated atom (no rule — engine reports 'asserted')
+  - ScheduleBackup                                    # stipulated atom (also derivable by MP via the rule below)
+  - ((SystemHealthy ∧ DatabaseConnected) → SystemAlert)  # stipulated rule
+  - (BackupCompleted → ScheduleBackup)                # stipulated rule
 
 steps:
   # STEP 1: (SystemHealthy ∧ DatabaseConnected)
   - rule: alpha
     subtype: and
     from:
-      - SystemHealthy
-      - DatabaseConnected
+      - SystemHealthy                                 # resolver
+      - DatabaseConnected                             # resolver
 
   # STEP 2: (SecurityScanPassed ∧ DiskSpaceAvailable)
   - rule: alpha
     subtype: and
     from:
-      - SecurityScanPassed
-      - DiskSpaceAvailable
+      - SecurityScanPassed                            # resolver
+      - DiskSpaceAvailable                            # resolver
 
 targets:
-  - (SystemHealthy ∧ DatabaseConnected)
-  - ((SystemHealthy ∧ DatabaseConnected) → SystemAlert)
-  - (SecurityScanPassed ∧ DiskSpaceAvailable)
+  - (SystemHealthy ∧ DatabaseConnected)               # from step 1 (alpha-AND)
+  - ((SystemHealthy ∧ DatabaseConnected) → SystemAlert)  # stipulated rule (engine: 'asserted')
+  - (SecurityScanPassed ∧ DiskSpaceAvailable)         # from step 2 (alpha-AND)

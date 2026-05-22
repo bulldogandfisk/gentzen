@@ -473,6 +473,44 @@ test('expandOneLevel - generates conjunctions and disjunctions from propositions
     t.true(hasConjunction);
 });
 
+// Coverage: _collectInScopeAtoms catches parse errors so a malformed fact
+// can't crash resolvability checks.
+//
+test('isAtomResolvable - tolerates malformed formula in facts set', t => {
+    const sys = new GentzenSystem();
+    sys.addFact('A');
+    sys.facts.add('(B ∧'); // poke a malformed string directly past addFact validation
+    t.notThrows(() => sys.isAtomResolvable('Z'));
+    t.true(sys.isAtomResolvable('A'));
+});
+
+// Coverage: expandOneLevel's sourceMeta catch handles a fact whose value is
+// unparseable. addFact does not validate formula syntax, so a malformed
+// fact can reach the metadata loop and trip the parser.
+//
+test('expandOneLevel - tolerates malformed fact in metadata precomputation', t => {
+    const sys = new GentzenSystem();
+    sys.addFact('A');
+    sys.facts.add('(unparseable ∧');
+    t.notThrows(() => sys.expandOneLevel());
+});
+
+// Coverage: disjunctive syllogism's left-survivor branch (formulaJ matches
+// negRight → survivor is leftStr). Existing tests cover the right-survivor
+// case via searchForProof; this exercises the symmetric branch through BFS.
+//
+test('searchForProof - DS left-survivor: from (A ∨ B) and ~B derives A', t => {
+    const sys = new GentzenSystem();
+    sys.addProposition('(A ∨ B)');
+    sys.addProposition('~B');
+
+    const result = sys.searchForProof('A');
+
+    t.true(result.proven);
+    t.is(result.derivation, 'inference');
+    t.true(result.path.some(s => s.rule === 'disjunctiveSyllogism'));
+});
+
 // searchForProof - queue size overflow
 //
 

@@ -3,26 +3,26 @@
 propositions:
   # Business rules only. Action atoms ProcessOrder, SendAlert, ScheduleMaintenance
   # are derived via MP — not stipulated.
-  - ((CustomerIsVIP ∧ PaymentProcessed) → ProcessOrder)
-  - ((SystemHealthy ∧ IsBusinessHours) → ScheduleMaintenance)
+  - ((CustomerIsVIP ∧ PaymentProcessed) → ProcessOrder)            # stipulated rule
+  - ((SystemHealthy ∧ IsBusinessHours) → ScheduleMaintenance)      # stipulated rule
 
 steps:
   # Business logic: Customer + Payment
   - rule: alpha
     subtype: and
     from:
-      - CustomerIsVIP
-      - PaymentProcessed
+      - CustomerIsVIP                            # resolver
+      - PaymentProcessed                         # resolver
 
   # System check: Health + Time
   - rule: alpha
     subtype: and
     from:
-      - SystemHealthy
-      - IsBusinessHours
+      - SystemHealthy                            # resolver
+      - IsBusinessHours                          # resolver
 
 targets:
-  - (CustomerIsVIP AND PaymentProcessed)
-  - (SystemHealthy & IsBusinessHours)
-  - ProcessOrder
-  - ScheduleMaintenance
+  - (CustomerIsVIP AND PaymentProcessed)         # from step 1 (alpha-AND)
+  - (SystemHealthy & IsBusinessHours)            # from step 2 (alpha-AND)
+  - ProcessOrder                                 # MP: step 1 + first stipulated rule
+  - ScheduleMaintenance                          # MP: step 2 + second stipulated rule

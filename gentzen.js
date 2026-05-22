@@ -729,14 +729,14 @@ export class GentzenSystem {
             const formula = [...src.formulas][0];
             const entry = {
                 formula,
-                formulaNorm: normalizeFormula(formula),
+                formulaNorm: null,
                 parsed: null,
                 isImplication: false,
                 isDisjunction: false,
-                isConjunction: false,
-                isDoubleNegated: false
+                isConjunction: false
             };
             try {
+                entry.formulaNorm = normalizeFormula(formula);
                 const parsed = parseFormulaFromString(formula);
                 entry.parsed = parsed;
                 if (isImplication(parsed)) {
@@ -764,9 +764,6 @@ export class GentzenSystem {
                     entry.isConjunction = true;
                     entry.leftStr = astToStringImpl(parsed.left);
                     entry.rightStr = astToStringImpl(parsed.right);
-                } else if (isNegation(parsed) && isNegation(parsed.operand)) {
-                    entry.isDoubleNegated = true;
-                    entry.dnElimStr = astToStringImpl(normalizeAST(parsed.operand.operand));
                 }
             } catch (e) {
                 _logger.debug(`expandOneLevel: parse failed for "${formula}": ${e.message}`);
@@ -798,12 +795,12 @@ export class GentzenSystem {
         //
         for (let i = 0; i < sourceCount; i += 1) {
             const metaI = sourceMeta[i];
-            if (!metaI) { continue; }
+            if (!metaI || metaI.formulaNorm === null) { continue; }
             const formulaI = metaI.formula;
 
             for (let j = 0; j < sourceCount; j += 1) {
                 const metaJ = sourceMeta[j];
-                if (!metaJ) { continue; }
+                if (!metaJ || metaJ.formulaNorm === null) { continue; }
                 const formulaJ = metaJ.formula;
 
                 // Alpha AND and beta OR don't require parsing — they just
@@ -881,18 +878,13 @@ export class GentzenSystem {
                 });
             }
 
-            // Double-negation introduction applies to any parseable formula.
+            // Double-negation introduction/elimination are intentionally NOT
+            // attempted here: AST normalization collapses ~~X to X, so the
+            // intro candidate ~~X canonicalizes to the source X (already known)
+            // and the elim of a ~~X source canonicalizes to X (also already
+            // known via the source's _knownFormulas entry). Both would always
+            // dedup. The rules remain available for explicit YAML steps.
             //
-            const introStr = astToStringImpl(negate(negate(metaI.parsed)));
-            tryAdd(normalizeFormula(introStr), (clone) => {
-                clone.doubleNegationRule(cloneSourceAt(clone, i), 'introduction');
-            });
-
-            if (metaI.isDoubleNegated) {
-                tryAdd(normalizeFormula(metaI.dnElimStr), (clone) => {
-                    clone.doubleNegationRule(cloneSourceAt(clone, i), 'elimination');
-                });
-            }
 
             if (metaI.isConjunction) {
                 tryAdd(normalizeFormula(metaI.leftStr), (clone) => {

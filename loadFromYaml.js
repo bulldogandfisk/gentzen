@@ -105,27 +105,24 @@ export function buildGentzenSystem(scenario, factMap = {}, options = {}) {
                     continue;
                 }
 
-                const foundSteps = system.findStepsContaining(formula);
-                if (foundSteps.length > 0) {
-                    stepObjects.push(foundSteps[0]);
-                    continue;
-                }
-
-                let resolution;
                 try {
-                    resolution = system.canResolveFormula(formula);
+                    const foundSteps = system.findStepsContaining(formula);
+                    if (foundSteps.length > 0) {
+                        stepObjects.push(foundSteps[0]);
+                        continue;
+                    }
+
+                    const resolution = system.canResolveFormula(formula);
+                    if (!resolution.canResolve) {
+                        missingFacts.push(...resolution.missing);
+                        skipReasons.push('missing_fact');
+                    } else {
+                        skipReasons.push('unknown_atom');
+                        logger.debug(`Step #${index + 1}: formula "${formula}" has no matching fact or step`);
+                    }
                 } catch (parseErr) {
                     skipReasons.push('parse_error');
                     logger.debug(`Step #${index + 1}: parse error on "${formula}": ${parseErr.message}`);
-                    continue;
-                }
-
-                if (!resolution.canResolve) {
-                    missingFacts.push(...resolution.missing);
-                    skipReasons.push('missing_fact');
-                } else {
-                    skipReasons.push('unknown_atom');
-                    logger.debug(`Step #${index + 1}: formula "${formula}" has no matching fact or step`);
                 }
             }
 

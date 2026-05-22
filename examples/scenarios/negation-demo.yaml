@@ -7,32 +7,32 @@
 propositions:
   # Business rules only. Action atoms (AccessDenied, AllowGuestAccess,
   # SystemAvailable) are derived via MP — not stipulated.
-  - ((~UserHasPermission ∧ SecurityCheckPassed) → AccessDenied)
-  - ((UserIsGuest ∧ ~MaintenanceMode) → AllowGuestAccess)
-  - ((SecurityCheckPassed ∧ ~MaintenanceMode) → SystemAvailable)
+  - ((~UserHasPermission ∧ SecurityCheckPassed) → AccessDenied)        # stipulated rule
+  - ((UserIsGuest ∧ ~MaintenanceMode) → AllowGuestAccess)              # stipulated rule
+  - ((SecurityCheckPassed ∧ ~MaintenanceMode) → SystemAvailable)       # stipulated rule
 
 steps:
   # Build the conjunctions from atomic resolver facts so MP can fire.
   - rule: alpha
     subtype: and
     from:
-      - ~UserHasPermission
-      - SecurityCheckPassed
+      - ~UserHasPermission                       # resolver (returns false → closed-world ~Atom)
+      - SecurityCheckPassed                      # resolver
 
   - rule: alpha
     subtype: and
     from:
-      - UserIsGuest
-      - ~MaintenanceMode
+      - UserIsGuest                              # resolver
+      - ~MaintenanceMode                         # resolver (returns false → closed-world ~Atom)
 
   - rule: alpha
     subtype: and
     from:
-      - SecurityCheckPassed
-      - ~MaintenanceMode
+      - SecurityCheckPassed                      # resolver
+      - ~MaintenanceMode                         # resolver (returns false → closed-world ~Atom)
 
 targets:
-  - AccessDenied                           # Should be proven via MP
-  - AllowGuestAccess                       # Should be proven via MP
-  - SystemAvailable                        # Should be proven via MP
-  - (UserIsGuest ∧ ~MaintenanceMode)       # Conjunction with negation
+  - AccessDenied                                 # MP: step 1 + first stipulated rule
+  - AllowGuestAccess                             # MP: step 2 + second stipulated rule
+  - SystemAvailable                              # MP: step 3 + third stipulated rule
+  - (UserIsGuest ∧ ~MaintenanceMode)             # from step 2 (alpha-AND)

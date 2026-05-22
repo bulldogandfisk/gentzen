@@ -42,10 +42,18 @@ export function extractFormulaAtoms(formula) {
     return Array.from(getAtoms(ast));
 }
 
-// Extract atoms from a formula and add them to a set (for collecting atoms)
+// Extract atoms from a formula and add them to a set (for collecting atoms).
+// Silently skips unparseable formulas so that scenario-level atom collection
+// can survive a malformed step; the malformed formula will be surfaced later
+// by the step processor as a parse_error skip.
 //
 export function addFormulaAtomsToSet(formula, atomSet) {
-    const ast = normalizeAST(parseFormulaFromString(formula));
+    let ast;
+    try {
+        ast = normalizeAST(parseFormulaFromString(formula));
+    } catch {
+        return;
+    }
     const atoms = getAtoms(ast);
     atoms.forEach(atom => atomSet.add(atom));
 }

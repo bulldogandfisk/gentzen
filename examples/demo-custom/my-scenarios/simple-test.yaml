@@ -1,18 +1,18 @@
 propositions:
-  - BookFlight
-  - BookOperaTickets
-  - (UserHasOperaInterest → BookOperaTickets)
-  - (TravelingWithDog → BookFlight)
+  - BookFlight                                  # stipulated atom (engine reports 'asserted')
+  - BookOperaTickets                            # stipulated atom (engine reports 'asserted')
+  - (UserHasOperaInterest → BookOperaTickets)   # stipulated rule
+  - (TravelingWithDog → BookFlight)             # stipulated rule
 
 steps:
   # STEP 1: (UserWantsEuropeanFlight ∧ UserHasVisa)
   - rule: alpha
     subtype: and
     from:
-      - UserWantsEuropeanFlight
-      - UserHasVisa
+      - UserWantsEuropeanFlight                 # resolver
+      - UserHasVisa                             # resolver
 
 targets:
-  - (UserWantsEuropeanFlight ∧ UserHasVisa)
-  - BookOperaTickets
-  - BookFlight
+  - (UserWantsEuropeanFlight ∧ UserHasVisa)     # from step 1 (alpha-AND)
+  - BookOperaTickets                            # also stipulated (engine: 'asserted')
+  - BookFlight                                  # also stipulated (engine: 'asserted')
